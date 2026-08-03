@@ -360,7 +360,7 @@ This contract is **mandatory** for every process that executes tenant-scoped dat
   - **Exact logout and immediate session revocation** — deleting a session row revokes it instantly; every request re-validates the session against the store
   - **No JWTs for normal browser authentication** — JWTs cannot be revoked without denylist/versioning machinery and are not used as the browser session mechanism
   - **JWTs may be used later only for explicitly designed machine-to-machine or public API access** (Section 4), never as the browser session mechanism
-- Password rules, login rate limiting (5 attempts / 10 minutes), forgot-password flow with email tokens, account lockout
+- Password rules — **FINAL DECISION**: minimum 12 characters, maximum 128 characters, no uppercase/lowercase/digit/special-character requirements (passphrases fully supported); login rate limiting (5 attempts / 10 minutes), forgot-password flow with email tokens, account lockout
 - **MFA (TOTP)** and **passkeys** as later phases
 - Sessions are tenant-aware only through memberships (Section 8) — authentication proves *who* you are, authorization decides *what* you can access
 
