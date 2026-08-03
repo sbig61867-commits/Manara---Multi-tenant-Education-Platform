@@ -1,0 +1,122 @@
+/* =============================================================================
+   Manara design tokens — DESIGN_SYSTEM.md §22
+   Light theme (:root) and dark theme (.dark). Tailwind maps to these variables
+   via tailwind.config.ts. Never hard-code hex values in components.
+   ===========================================================================*/
+
+:root {
+  /* Brand — Minaret Blue */
+  --brand-50: #f0f6f9;
+  --brand-100: #dcecf3;
+  --brand-200: #b9d9e7;
+  --brand-300: #8dc0d6;
+  --brand-400: #55a1c0;
+  --brand-500: #3386aa;
+  --brand-600: #1f6e93;
+  --brand-700: #1b5a79;
+  --brand-800: #1a4a63;
+  --brand-900: #183e52;
+  --brand-950: #0c2331;
+
+  /* Accent — Heritage Gold (achievement only) */
+  --gold-400: #d4b45c;
+  --gold-500: #c29b3a;
+  --gold-600: #a9812b;
+  --gold-700: #8a6820;
+
+  /* Neutrals — Parchment */
+  --canvas: #faf9f6;
+  --surface: #ffffff;
+  --surface-muted: #f3f1ec;
+  --ink-50: #f0f2f5;
+  --ink-100: #e4e7ec;
+  --ink-200: #c6ccd6;
+  --ink-300: #9aa4b2;
+  --ink-400: #7a8595;
+  --ink-500: #5a6676;
+  --ink-600: #3a4553;
+  --ink-700: #1c2430;
+  --ink-800: #141a23;
+
+  /* Semantic */
+  --success: #2f7d4f;
+  --success-bg: #e8f3ec;
+  --warning: #b45309;
+  --warning-bg: #fbf0e0;
+  --danger: #c2392b;
+  --danger-bg: #fbe9e7;
+  --info: #1f6e93;
+  --info-bg: #f0f6f9;
+
+  /* Chart (colorblind-safe categorical) */
+  --chart-1: #1f6e93;
+  --chart-2: #c29b3a;
+  --chart-3: #4e7c6b;
+  --chart-4: #8a6bbe;
+  --chart-5: #c2665b;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(20, 26, 35, 0.05);
+  --shadow-md: 0 4px 12px rgba(20, 26, 35, 0.06);
+  --shadow-lg: 0 12px 32px rgba(20, 26, 35, 0.1);
+  --ring-focus: 0 0 0 3px rgba(31, 110, 147, 0.35);
+
+  /* Motion */
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 300ms;
+  --motion-xslow: 400ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark {
+  --canvas: #0e141b;
+  --surface: #161d26;
+  --surface-muted: #1d2732;
+  --ink-50: #1d2732;
+  --ink-100: #2a3542;
+  --ink-200: #37424f;
+  --ink-300: #5c6876;
+  --ink-400: #8b96a4;
+  --ink-500: #a9b3bf;
+  --ink-600: #c7cfd8;
+  --ink-700: #edf1f5;
+  --ink-800: #f6f8fa;
+
+  --brand-50: #12242e;
+  --brand-100: #14303d;
+  --brand-200: #1a3f4f;
+  --brand-300: #235368;
+  --brand-400: #2e6f8c;
+  --brand-500: #3e93bc;
+  --brand-600: #3e93bc;
+  --brand-700: #55a1c0;
+  --brand-800: #8dc0d6;
+  --brand-900: #b9d9e7;
+  --brand-950: #dcecf3;
+
+  --gold-400: #d4b45c;
+  --gold-500: #d4b45c;
+  --gold-600: #d4b45c;
+  --gold-700: #c29b3a;
+
+  --success: #4caf7e;
+  --success-bg: #14301f;
+  --warning: #e09a3e;
+  --warning-bg: #2e2213;
+  --danger: #e57368;
+  --danger-bg: #2e1714;
+  --info: #3e93bc;
+  --info-bg: #12242e;
+
+  --chart-1: #3e93bc;
+  --chart-2: #d4b45c;
+  --chart-3: #6f9c8b;
+  --chart-4: #a58fd1;
+  --chart-5: #d1847b;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --ring-focus: 0 0 0 3px rgba(62, 147, 188, 0.45);
+}

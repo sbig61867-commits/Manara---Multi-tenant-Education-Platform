@@ -1,0 +1,72 @@
+import type { Config } from 'tailwindcss';
+
+export default {
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          50: 'var(--brand-50)',
+          100: 'var(--brand-100)',
+          200: 'var(--brand-200)',
+          300: 'var(--brand-300)',
+          400: 'var(--brand-400)',
+          500: 'var(--brand-500)',
+          600: 'var(--brand-600)',
+          700: 'var(--brand-700)',
+          800: 'var(--brand-800)',
+          900: 'var(--brand-900)',
+          950: 'var(--brand-950)',
+        },
+        gold: {
+          400: 'var(--gold-400)',
+          500: 'var(--gold-500)',
+          600: 'var(--gold-600)',
+          700: 'var(--gold-700)',
+        },
+        canvas: 'var(--canvas)',
+        surface: 'var(--surface)',
+        'surface-muted': 'var(--surface-muted)',
+        ink: {
+          50: 'var(--ink-50)',
+          100: 'var(--ink-100)',
+          200: 'var(--ink-200)',
+          300: 'var(--ink-300)',
+          400: 'var(--ink-400)',
+          500: 'var(--ink-500)',
+          600: 'var(--ink-600)',
+          700: 'var(--ink-700)',
+          800: 'var(--ink-800)',
+        },
+        success: 'var(--success)',
+        'success-bg': 'var(--success-bg)',
+        warning: 'var(--warning)',
+        'warning-bg': 'var(--warning-bg)',
+        danger: 'var(--danger)',
+        'danger-bg': 'var(--danger-bg)',
+        info: 'var(--info)',
+        'info-bg': 'var(--info-bg)',
+        chart: {
+          1: 'var(--chart-1)',
+          2: 'var(--chart-2)',
+          3: 'var(--chart-3)',
+          4: 'var(--chart-4)',
+          5: 'var(--chart-5)',
+        },
+      },
+      fontFamily: {
+        display: ['Lexend', '"Noto Kufi Arabic"', 'system-ui', 'sans-serif'],
+        sans: ['"IBM Plex Sans"', '"IBM Plex Sans Arabic"', 'system-ui', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', '"IBM Plex Sans Arabic"', 'monospace'],
+      },
+      boxShadow: {
+        sm: 'var(--shadow-sm)',
+        md: 'var(--shadow-md)',
+        lg: 'var(--shadow-lg)',
+        'ring-focus': 'var(--ring-focus)',
+      },
+    },
+  },
+  plugins: [],
+} satisfies Config;

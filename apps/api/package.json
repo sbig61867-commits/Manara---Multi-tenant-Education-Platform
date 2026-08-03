@@ -1,0 +1,33 @@
+{
+  "name": "@manara/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Manara API — NestJS on Fastify (modular monolith, stateless instances)",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@manara/config": "*",
+    "@manara/contracts": "*",
+    "@manara/logger": "*",
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-fastify": "^11.1.28",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@manara/eslint-config": "*",
+    "@manara/tsconfig": "*",
+    "@nestjs/cli": "^11.0.24",
+    "@types/node": "^24.13.3",
+    "eslint": "^9.39.5",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@manara/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Manara background worker — queue consumer tier (pg-boss in later phase)",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@manara/config": "*",
+    "@manara/contracts": "*",
+    "@manara/logger": "*"
+  },
+  "devDependencies": {
+    "@manara/eslint-config": "*",
+    "@manara/tsconfig": "*",
+    "@types/node": "^24.13.3",
+    "eslint": "^9.39.5",
+    "tsx": "^4.23.4",
+    "typescript": "^5.9.3"
+  }
+}
