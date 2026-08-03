@@ -92,28 +92,31 @@ export class MigrationRunner {
     if (pending.length === 0) {
       return [];
     }
-    await this.database.query(`SELECT pg_advisory_lock(${MIGRATION_ADVISORY_LOCK_KEY})`);
-    try {
-      const toApply = await this.pendingMigrations();
-      const applied: MigrationFile[] = [];
-      for (const migration of toApply) {
-        const sql = await readFile(join(this.options.migrationsDir, migration.filename), 'utf8');
-        await this.database.withTransaction(async (tx) => {
-          await tx.query(sql);
-          await tx.query(`INSERT INTO ${this.tableName} (version, name) VALUES ($1, $2)`, [
-            migration.version,
-            migration.name,
-          ]);
-        });
+    const applied: MigrationFile[] = [];
+    for (const migration of pending) {
+      const sql = await readFile(join(this.options.migrationsDir, migration.filename), 'utf8');
+      const didApply = await this.database.withTransaction(async (tx) => {
+        await tx.query(`SELECT pg_advisory_xact_lock(${MIGRATION_ADVISORY_LOCK_KEY})`);
+        const alreadyApplied = await tx.query(
+          `SELECT 1 FROM ${this.tableName} WHERE version = $1 LIMIT 1`,
+          [migration.version],
+        );
+        if (alreadyApplied.rows.length > 0) {
+          return false;
+        }
+        await tx.query(sql);
+        await tx.query(`INSERT INTO ${this.tableName} (version, name) VALUES ($1, $2)`, [
+          migration.version,
+          migration.name,
+        ]);
+        return true;
+      });
+      if (didApply) {
         this.logger?.info({ event: 'migration.applied', version: migration.version, name: migration.name });
         applied.push(migration);
       }
-      return applied;
-    } finally {
-      await this.database
-        .query(`SELECT pg_advisory_unlock(${MIGRATION_ADVISORY_LOCK_KEY})`)
-        .catch(() => undefined);
     }
+    return applied;
   }
 
   private async ensureLedgerTable(): Promise<void> {

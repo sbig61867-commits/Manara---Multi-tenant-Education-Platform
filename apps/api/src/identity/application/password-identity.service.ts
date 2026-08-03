@@ -13,6 +13,7 @@ import {
   IDENTITY_EVENT_PUBLISHER,
   PASSWORD_HASHER,
   PASSWORD_IDENTITY_REPOSITORY,
+  SESSION_SERVICE,
   USER_REPOSITORY,
 } from '../identity.tokens.js';
 import type { PasswordIdentityRepository } from '../ports/identity.repository.js';
@@ -26,7 +27,7 @@ export class PasswordIdentityService {
     @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
     @Inject(PASSWORD_IDENTITY_REPOSITORY) private readonly identityRepository: PasswordIdentityRepository,
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasher,
-    private readonly sessionService: SessionService,
+    @Inject(SESSION_SERVICE) private readonly sessionService: SessionService,
     @Inject(IDENTITY_EVENT_PUBLISHER) private readonly events: IdentityEventPublisher,
   ) {}
 

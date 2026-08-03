@@ -15,6 +15,7 @@ import {
   PASSWORD_HASHER,
   PASSWORD_IDENTITY_REPOSITORY,
   SESSION_REPOSITORY,
+  SESSION_SERVICE,
   TRANSACTION_RUNNER,
   USER_REPOSITORY,
 } from './identity.tokens.js';
@@ -42,6 +43,7 @@ export class IdentityModule {
         { provide: PASSWORD_IDENTITY_REPOSITORY, useValue: new PostgresPasswordIdentityRepository(database) },
         { provide: SESSION_REPOSITORY, useValue: new PostgresSessionRepository(database) },
         { provide: TRANSACTION_RUNNER, useValue: new PostgresTransactionRunner(database) },
+        { provide: SESSION_SERVICE, useClass: SessionService },
       ],
     };
   }

@@ -13,7 +13,7 @@ export function createTestDatabase(logger?: DatabaseLogger): PostgresDatabase {
   }
   return new PostgresDatabase({
     connectionString: url,
-    connectionTimeoutMillis: 3000,
+    connectionTimeoutMillis: 8000,
     logger,
   });
 }

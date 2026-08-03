@@ -38,8 +38,8 @@ test('verify rejects malformed encodings without throwing', async () => {
 
 test('verify rejects a tampered hash segment', async () => {
   const encoded = await hasher.hash('correct horse battery staple');
-  const parts = encoded.split('$');
-  const last = parts[parts.length - 1];
-  const tampered = [...encoded.slice(0, encoded.length - 1), last === 'A' ? 'B' : 'A'].join('');
+  const idx = encoded.length - 10;
+  const replacement = encoded[idx] === 'A' ? 'B' : 'A';
+  const tampered = `${encoded.slice(0, idx)}${replacement}${encoded.slice(idx + 1)}`;
   assert.equal(await hasher.verify('correct horse battery staple', tampered), false);
 });
