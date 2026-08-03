@@ -1,19 +1,30 @@
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5173,
-    proxy: {
-      '/v1': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/health': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
+function toPort(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : fallback;
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, '../../', '');
+  const webPort = toPort(env.WEB_PORT, 5173);
+  const apiPort = toPort(env.API_PORT, 3000);
+  return {
+    plugins: [react()],
+    envDir: '../../',
+    server: {
+      port: webPort,
+      proxy: {
+        '/v1': {
+          target: `http://localhost:${apiPort}`,
+          changeOrigin: true,
+        },
+        '/health': {
+          target: `http://localhost:${apiPort}`,
+          changeOrigin: true,
+        },
       },
     },
-  },
+  };
 });

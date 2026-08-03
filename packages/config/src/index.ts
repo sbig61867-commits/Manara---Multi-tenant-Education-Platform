@@ -10,7 +10,7 @@ export const baseEnvSchema = z.object({
     .default('info'),
   LOG_PRETTY: z
     .enum(['true', 'false'])
-    .default('true')
+    .default('false')
     .transform((value) => value === 'true'),
 });
 
