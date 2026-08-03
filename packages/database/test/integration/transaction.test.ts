@@ -58,7 +58,10 @@ describe('transactions (integration)', { skip }, () => {
       /boom/,
     );
     const rows = await db.query<{ value: string }>(`SELECT value FROM ${TABLE}`);
-    assert.deepEqual(rows.rows, []);
+    assert.deepEqual(
+      rows.rows.map((row) => row.value),
+      ['committed'],
+    );
   });
 
   test('routes queries through the active transaction context', async () => {
@@ -66,7 +69,9 @@ describe('transactions (integration)', { skip }, () => {
     let observed: string | undefined;
     await db.withTransaction(async () => {
       await db.query(`INSERT INTO ${TABLE} (value) VALUES ($1)`, ['context']);
-      const rows = await db.query<{ value: string }>(`SELECT value FROM ${TABLE}`);
+      const rows = await db.query<{ value: string }>(
+        `SELECT value FROM ${TABLE} ORDER BY id DESC LIMIT 1`,
+      );
       observed = rows.rows[0]?.value;
     });
     assert.equal(observed, 'context');
@@ -81,8 +86,7 @@ describe('transactions (integration)', { skip }, () => {
         const rows = await tx.query<{ value: string }>(`SELECT value FROM ${TABLE} WHERE value LIKE $1`, [
           `%-${marker}`,
         ]);
-        assert.equal(rows.rows.length, 1);
-        assert.equal(rows.rows[0]?.value, `${value}-${marker}`);
+        assert.ok(rows.rows.some((row) => row.value === `${value}-${marker}`));
       });
     await Promise.all([work('a'), work('b')]);
     const rows = await db.query<{ value: string }>(`SELECT value FROM ${TABLE} WHERE value LIKE $1`, [

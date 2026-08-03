@@ -1,5 +1,6 @@
-import { PostgresDatabase } from '../src/index.js';
-import type { DatabaseLogger } from '../src/index.js';
+import 'reflect-metadata';
+import { resolve } from 'node:path';
+import { PostgresDatabase, type DatabaseLogger } from '@manara/database';
 
 export function getTestDatabaseUrl(): string | null {
   const raw = process.env.DATABASE_URL;
@@ -18,14 +19,7 @@ export function createTestDatabase(logger?: DatabaseLogger): PostgresDatabase {
   });
 }
 
-export async function withTestDatabase<T>(work: (database: PostgresDatabase) => Promise<T>): Promise<T> {
-  const database = createTestDatabase();
-  try {
-    return await work(database);
-  } finally {
-    await database.close();
-  }
-}
+export const MIGRATIONS_DIR = resolve(process.cwd(), '../../packages/database/src/migrations/sql');
 
 export class CollectingLogger implements DatabaseLogger {
   readonly events: Array<{ level: 'info' | 'warn' | 'error'; event: Record<string, unknown> }> = [];

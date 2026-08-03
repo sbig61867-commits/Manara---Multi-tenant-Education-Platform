@@ -36,3 +36,30 @@ export const cursorPaginationSchema = z.object({
 });
 
 export type CursorPagination = z.infer<typeof cursorPaginationSchema>;
+
+export const emailSchema = z.string().trim().toLowerCase().min(1).max(254);
+
+export type Email = z.infer<typeof emailSchema>;
+
+export const userIdSchema = z.string().uuid();
+
+export type UserId = z.infer<typeof userIdSchema>;
+
+export const userSummarySchema = z.object({
+  id: userIdSchema,
+  email: emailSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type UserSummary = z.infer<typeof userSummarySchema>;
+
+export const authSessionSchema = z.object({
+  id: z.string(),
+  userId: userIdSchema,
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  idleExpiresAt: z.string(),
+});
+
+export type AuthSessionView = z.infer<typeof authSessionSchema>;

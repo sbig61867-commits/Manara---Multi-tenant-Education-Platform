@@ -10,7 +10,7 @@ export interface ReadinessCheckOptions {
   timeoutMs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 2000;
+const DEFAULT_TIMEOUT_MS = 8000;
 
 export async function checkDatabaseReadiness(
   executor: SqlExecutor,

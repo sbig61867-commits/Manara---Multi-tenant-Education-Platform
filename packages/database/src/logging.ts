@@ -26,10 +26,13 @@ export interface DatabaseLogger {
 function noop(): void {}
 
 export function fromPinoLogger(logger: LoggerLike): DatabaseLogger {
+  const info = (logger.info ?? noop).bind(logger);
+  const warn = (logger.warn ?? noop).bind(logger);
+  const error = (logger.error ?? noop).bind(logger);
   return {
-    info: (event) => (logger.info ?? noop)({ ...event }, 'database'),
-    warn: (event) => (logger.warn ?? noop)({ ...event }, 'database'),
-    error: (event) => (logger.error ?? noop)({ ...event }, 'database'),
+    info: (event) => info({ ...event }, 'database'),
+    warn: (event) => warn({ ...event }, 'database'),
+    error: (event) => error({ ...event }, 'database'),
   };
 }
 
