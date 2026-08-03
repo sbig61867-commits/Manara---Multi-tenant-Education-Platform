@@ -5,7 +5,7 @@
 > - **Version:** 1.0 (draft for review)
 > - **Status:** Approved for implementation by the frontend team
 > - **Scope:** Marketing site, product (dashboard) UI, and all user-facing surfaces
-> - **Applies to:** Frontend per TECHNICAL_GUIDE §2 (React 19 + Vite + TypeScript + Tailwind CSS + TanStack Query, shadcn/ui component base)
+> - **Applies to:** Frontend per TECHNICAL_GUIDE §2 (React 19 + Vite + TypeScript + Tailwind CSS + TanStack Query, React Aria Components + Tailwind token utility layer)
 > - **Related docs:** PRODUCT_VISION.md · TECHNICAL_GUIDE.md · DOMAIN_MODEL.md · DATABASE_MODEL.md · SYSTEM_ARCHITECTURE.md · MODULE_SPECIFICATION.md
 > - **Tooling note:** Design direction researched and validated with the UI/UX Pro Max skill (`uipro`); recommendations that contradict the product brief (e.g. Claymorphism) were consciously rejected and recorded in §23 Decision Log.
 
@@ -23,7 +23,7 @@ This document defines:
 4. Accessibility, responsive, and dark-mode rules that are **mandatory**, not optional.
 5. The Decision Log recording why each direction was chosen.
 
-No UI code lives here. Implementation consumes these tokens and patterns through the Tailwind theme and shadcn/ui primitives.
+No UI code lives here. Implementation consumes these tokens and patterns through the Tailwind theme (token utility layer) and React Aria Components headless primitives.
 
 ---
 
@@ -304,7 +304,7 @@ Rules:
 
 ## 12. Component Language
 
-Base: **shadcn/ui components** (built on Radix primitives) re-skinned with these tokens.
+Base: **React Aria Components** headless primitives (approved per TECHNICAL_GUIDE §2, Decision Log #8), re-skinned with these tokens. Tailwind CSS is the styling/token utility layer only — it never defines component structure or behavior.
 
 ### 12.1 Buttons
 
@@ -432,7 +432,7 @@ Per-role calm overview (Education Analytics direction, expressed in Manara's cal
 
 ## 18. Charts & Data Visualization
 
-Library: **Recharts** (React-native, fits Tailwind/shadcn; documented in TECHNICAL_GUIDE's frontend stack).
+Library: **Recharts** (React-native; documented in TECHNICAL_GUIDE's frontend stack).
 
 | Pattern | Chart | Spec |
 |---|---|---|
@@ -551,7 +551,7 @@ breakpoints: sm 640, md 768, lg 1024, xl 1280, 2xl 1536
 | D3 | Product style = education product, but executed as enterprise SaaS | "Playful colors + clear hierarchy" (product DB default for e-learning) | Multi-tenant enterprise brief (100k+ users/org, institutions as buyers) overrides consumer-playful defaults |
 | D4 | Lexend + IBM Plex Sans/IBM Plex Sans Arabic + Noto Kufi Arabic | Inter-only, Baloo 2 + Comic Neue (generator suggestion), Poppins/Open Sans | Arabic-first requirement: Inter/Poppins lack full Arabic coverage; IBM Plex Arabic is the same-family premium pairing; Kufi display differentiates headings |
 | D5 | Marketing pattern: Enterprise Gateway (Contact Sales primary + Login secondary, mega menu, trust signals) | Storytelling/Feature-showcase patterns | B2B education buyers (institutions) need trust + direct sales path |
-| D6 | Recharts for all visualization | Chart.js | React-native, fits React 19 + Tailwind + shadcn stack in TECHNICAL_GUIDE §2 |
+| D6 | Recharts for all visualization | Chart.js | React-native, fits React 19 + React Aria + Tailwind stack in TECHNICAL_GUIDE §2 |
 | D7 | RTL via logical properties + direction-aware icons, tested as first-class | CSS `scaleX(-1)` page mirroring | Mirroring breaks icons, text flow, and chart axes; logical properties are the correct native approach |
 | D8 | Dark mode = token-level dark theme, default `prefers-color-scheme` + persisted toggle | Dark-by-default | The design-system generator flagged dark as anti-pattern for education products, but enterprise adoption and user expectation require it; token-level approach keeps AA contrast |
 
