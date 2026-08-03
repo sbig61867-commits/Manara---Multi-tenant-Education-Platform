@@ -9,9 +9,11 @@ import {
   IDENTITY_EVENT_PUBLISHER,
   PASSWORD_HASHER,
   PASSWORD_IDENTITY_REPOSITORY,
+  TRANSACTION_RUNNER,
   USER_REPOSITORY,
 } from '../identity.tokens.js';
 import type { PasswordIdentityRepository } from '../ports/identity.repository.js';
+import type { TransactionRunner } from '../ports/transaction-runner.js';
 import type { UserRepository } from '../ports/user.repository.js';
 import { assertValidPassword } from './password-policy.js';
 
@@ -27,6 +29,7 @@ export class UserCreationService {
     @Inject(PASSWORD_IDENTITY_REPOSITORY) private readonly identityRepository: PasswordIdentityRepository,
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasher,
     @Inject(IDENTITY_EVENT_PUBLISHER) private readonly events: IdentityEventPublisher,
+    @Inject(TRANSACTION_RUNNER) private readonly transactionRunner: TransactionRunner,
   ) {}
 
   async registerUser(command: RegisterUserCommand): Promise<User> {
@@ -49,8 +52,10 @@ export class UserCreationService {
       createdAt: now,
       updatedAt: now,
     };
-    await this.userRepository.create(user);
-    await this.identityRepository.create(identity);
+    await this.transactionRunner.runInTransaction(async () => {
+      await this.userRepository.create(user);
+      await this.identityRepository.create(identity);
+    });
     await this.events.publish({ type: 'user.registered', occurredAt: now, userId: user.id, email });
     await this.events.publish({ type: 'password.identity.attached', occurredAt: now, userId: user.id });
     return user;

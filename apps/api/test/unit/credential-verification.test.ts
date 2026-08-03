@@ -8,6 +8,7 @@ import {
   FakePasswordIdentityRepository,
   FakeUserRepository,
   RecordingEventPublisher,
+  TrackingTransactionRunner,
   createUser,
 } from './helpers.js';
 
@@ -23,11 +24,22 @@ function createServices(): {
   return { verification, users, identities };
 }
 
+function createRegistration(
+  users: FakeUserRepository,
+  identities: FakePasswordIdentityRepository,
+): UserCreationService {
+  return new UserCreationService(
+    users,
+    identities,
+    new FakePasswordHasher(),
+    new RecordingEventPublisher(),
+    new TrackingTransactionRunner(),
+  );
+}
+
 test('authenticate returns the user for valid credentials', async () => {
   const { verification, users, identities } = createServices();
-  const hasher = new FakePasswordHasher();
-  const events = new RecordingEventPublisher();
-  const registration = new UserCreationService(users, identities, hasher, events);
+  const registration = createRegistration(users, identities);
   await registration.registerUser({ email: 'student@example.com', password: 'correct-horse-9' });
   const user = await verification.authenticate('student@example.com', 'correct-horse-9');
   assert.equal(user.email, 'student@example.com');
@@ -35,9 +47,7 @@ test('authenticate returns the user for valid credentials', async () => {
 
 test('authenticate matches email case-insensitively', async () => {
   const { verification, users, identities } = createServices();
-  const hasher = new FakePasswordHasher();
-  const events = new RecordingEventPublisher();
-  const registration = new UserCreationService(users, identities, hasher, events);
+  const registration = createRegistration(users, identities);
   await registration.registerUser({ email: 'student@example.com', password: 'correct-horse-9' });
   const user = await verification.authenticate('  Student@Example.COM ', 'correct-horse-9');
   assert.equal(user.email, 'student@example.com');
@@ -53,9 +63,7 @@ test('authenticate rejects an unknown email with InvalidCredentialsError', async
 
 test('authenticate rejects a wrong password with InvalidCredentialsError', async () => {
   const { verification, users, identities } = createServices();
-  const hasher = new FakePasswordHasher();
-  const events = new RecordingEventPublisher();
-  const registration = new UserCreationService(users, identities, hasher, events);
+  const registration = createRegistration(users, identities);
   await registration.registerUser({ email: 'student@example.com', password: 'correct-horse-9' });
   await assert.rejects(
     () => verification.authenticate('student@example.com', 'wrong-password-1'),

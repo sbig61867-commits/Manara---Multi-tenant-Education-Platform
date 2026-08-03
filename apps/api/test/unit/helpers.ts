@@ -5,6 +5,7 @@ import type { AuthSession, PasswordIdentity, User } from '../../src/identity/dom
 import type { PasswordHasher } from '../../src/identity/hasher.js';
 import type { PasswordIdentityRepository } from '../../src/identity/ports/identity.repository.js';
 import type { SessionRepository } from '../../src/identity/ports/session.repository.js';
+import type { TransactionRunner } from '../../src/identity/ports/transaction-runner.js';
 import type { UserRepository } from '../../src/identity/ports/user.repository.js';
 
 export class FakeUserRepository implements UserRepository {
@@ -114,6 +115,23 @@ export class RecordingEventPublisher implements IdentityEventPublisher {
 
   eventsOfType(type: string): IdentityEvent[] {
     return this.published.filter((event) => event.type === type);
+  }
+}
+
+export class TrackingTransactionRunner implements TransactionRunner {
+  calls = 0;
+  maxDepth = 0;
+  private depth = 0;
+
+  async runInTransaction<T>(work: () => Promise<T>): Promise<T> {
+    this.calls += 1;
+    this.depth += 1;
+    this.maxDepth = Math.max(this.maxDepth, this.depth);
+    try {
+      return await work();
+    } finally {
+      this.depth -= 1;
+    }
   }
 }
 

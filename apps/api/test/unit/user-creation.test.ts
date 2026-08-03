@@ -6,20 +6,37 @@ import {
   UserAlreadyExistsError,
   WeakPasswordError,
 } from '../../src/identity/domain/errors.js';
-import { FakePasswordHasher, FakePasswordIdentityRepository, FakeUserRepository, RecordingEventPublisher } from './helpers.js';
+import {
+  FakePasswordHasher,
+  FakePasswordIdentityRepository,
+  FakeUserRepository,
+  RecordingEventPublisher,
+  TrackingTransactionRunner,
+} from './helpers.js';
 
-function createService(): {
+function createService(runner?: TrackingTransactionRunner): {
   service: UserCreationService;
   users: FakeUserRepository;
   identities: FakePasswordIdentityRepository;
   events: RecordingEventPublisher;
+  runner: TrackingTransactionRunner;
 } {
   const users = new FakeUserRepository();
   const identities = new FakePasswordIdentityRepository();
   const events = new RecordingEventPublisher();
-  const service = new UserCreationService(users, identities, new FakePasswordHasher(), events);
-  return { service, users, identities, events };
+  const transactionRunner = runner ?? new TrackingTransactionRunner();
+  const service = new UserCreationService(users, identities, new FakePasswordHasher(), events, transactionRunner);
+  return { service, users, identities, events, runner: transactionRunner };
 }
+
+test('registers the user and password identity inside a single transaction', async () => {
+  const { service, users, identities, runner } = createService();
+  const user = await service.registerUser({ email: 'student@example.com', password: 'correct-horse-9' });
+  assert.equal(runner.calls, 1);
+  assert.equal(runner.maxDepth, 1);
+  assert.ok(await users.findByEmail('student@example.com'));
+  assert.ok(await identities.findByUserId(user.id));
+});
 
 test('registers a user with a normalized email', async () => {
   const { service } = createService();
@@ -102,4 +119,19 @@ test('rejects a duplicate email', async () => {
     () => service.registerUser({ email: 'student@example.com', password: 'another-password-1' }),
     (error: unknown) => error instanceof UserAlreadyExistsError,
   );
+});
+
+test('publishes no events when the transaction work fails', async () => {
+  const failingRunner = new TrackingTransactionRunner();
+  failingRunner.runInTransaction = async () => {
+    throw new Error('transaction aborted');
+  };
+  const { service, users, identities, events } = createService(failingRunner);
+  await assert.rejects(
+    () => service.registerUser({ email: 'failed@example.com', password: 'correct-horse-9' }),
+    (error: unknown) => error instanceof Error && error.message === 'transaction aborted',
+  );
+  assert.equal(events.published.length, 0);
+  assert.equal(await users.findByEmail('failed@example.com'), null);
+  assert.equal(await identities.findByUserId('any'), null);
 });
