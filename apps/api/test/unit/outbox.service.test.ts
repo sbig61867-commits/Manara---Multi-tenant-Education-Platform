@@ -1,17 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { OUTBOX_DEFAULT_CLAIM_LEASE_MS } from '../../src/outbox/application/backoff.js';
 import {
   InvalidOutboxClaimError,
   InvalidOutboxMessageError,
   MissingTenantContextError,
-} from '../../src/outbox/domain/errors.js';
-import type { OutboxClaimCriteria, OutboxFailure, OutboxMessage } from '../../src/outbox/domain/types.js';
-import { OutboxService } from '../../src/outbox/application/outbox.service.js';
-import type { DeadLetterRepository } from '../../src/outbox/ports/dead-letter.repository.js';
-import type { OutboxClock } from '../../src/outbox/ports/outbox-clock.js';
-import type { OutboxEventPublisher } from '../../src/outbox/domain/events.js';
-import type { OutboxRepository } from '../../src/outbox/ports/outbox.repository.js';
+  OUTBOX_DEFAULT_CLAIM_LEASE_MS,
+  OutboxService,
+} from '@manara/outbox';
+import type {
+  DeadLetterRepository,
+  OutboxClaimCriteria,
+  OutboxClock,
+  OutboxEventPublisher,
+  OutboxFailure,
+  OutboxMessage,
+  OutboxRepository,
+} from '@manara/outbox';
 import {
   createOutboxEnqueueCommand,
   createOutboxMessage,

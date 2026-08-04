@@ -1,0 +1,30 @@
+{
+  "name": "@manara/outbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Manara outbox — transactional event outbox: contracts, persistence, service, dispatcher",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@manara/database": "*",
+    "@nestjs/common": "^11.1.28",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@manara/eslint-config": "*",
+    "@manara/tsconfig": "*",
+    "@types/node": "^24.13.3",
+    "eslint": "^9.39.5",
+    "typescript": "^5.9.3"
+  }
+}

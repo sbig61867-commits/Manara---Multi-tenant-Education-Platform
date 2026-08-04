@@ -3,14 +3,15 @@ import { randomUUID } from 'node:crypto';
 import type {
   DeadLetterRecord,
   DeadLetterRepository,
+  DispatchResult,
   OutboxClaimCriteria,
   OutboxClock,
-  OutboxEnqueueCommand,
-  OutboxEventPublisher,
   OutboxFailure,
   OutboxMessage,
   OutboxRepository,
 } from '@manara/outbox';
+import type { OutboxDispatcher } from '@manara/outbox';
+import type { RuntimeLogger } from '../../src/outbox-dispatcher-runtime.js';
 
 function isDue(message: OutboxMessage, now: Date): boolean {
   return message.nextAttemptAt === null || message.nextAttemptAt.getTime() <= now.getTime();
@@ -64,10 +65,10 @@ export class FakeOutboxRepository implements OutboxRepository {
 
   async markDelivered(id: string, deliveredAt: Date): Promise<boolean> {
     const message = this.messages.get(id);
-    if (message === undefined || message.status === 'delivered') {
+    if (message === undefined || message.status === 'delivered' || message.status !== 'claimed') {
       return false;
     }
-    if (message.status !== 'claimed') {
+    if (message.leaseExpiresAt !== null && message.leaseExpiresAt.getTime() <= deliveredAt.getTime()) {
       return false;
     }
     this.messages.set(id, { ...message, status: 'delivered', updatedAt: deliveredAt });
@@ -77,6 +78,9 @@ export class FakeOutboxRepository implements OutboxRepository {
   async markFailed(id: string, failure: OutboxFailure): Promise<boolean> {
     const message = this.messages.get(id);
     if (message === undefined || message.status !== 'claimed') {
+      return false;
+    }
+    if (message.leaseExpiresAt !== null && message.leaseExpiresAt.getTime() <= failure.occurredAt.getTime()) {
       return false;
     }
     this.messages.set(id, {
@@ -175,16 +179,29 @@ export class FakeOutboxClock implements OutboxClock {
   }
 }
 
-export class RecordingOutboxEventPublisher implements OutboxEventPublisher {
-  readonly deliveryFailed: Array<Parameters<OutboxEventPublisher['publishDeliveryFailed']>[0]> = [];
-  readonly deadLettered: Array<Parameters<OutboxEventPublisher['publishMessageDeadLettered']>[0]> = [];
+export class CollectingRuntimeLogger implements RuntimeLogger {
+  readonly entries: Array<{ level: 'info' | 'warn' | 'error'; object: Record<string, unknown> }> = [];
 
-  publishDeliveryFailed(event: Parameters<OutboxEventPublisher['publishDeliveryFailed']>[0]): void {
-    this.deliveryFailed.push(event);
+  info(object: Record<string, unknown>): void {
+    this.entries.push({ level: 'info', object: { ...object } });
   }
 
-  publishMessageDeadLettered(event: Parameters<OutboxEventPublisher['publishMessageDeadLettered']>[0]): void {
-    this.deadLettered.push(event);
+  warn(object: Record<string, unknown>): void {
+    this.entries.push({ level: 'warn', object: { ...object } });
+  }
+
+  error(object: Record<string, unknown>): void {
+    this.entries.push({ level: 'error', object: { ...object } });
+  }
+}
+
+export class StubDispatcher implements OutboxDispatcher {
+  constructor(
+    private readonly handler: (message: OutboxMessage) => Promise<DispatchResult> | DispatchResult,
+  ) {}
+
+  dispatch(message: OutboxMessage): Promise<DispatchResult> {
+    return Promise.resolve(this.handler(message));
   }
 }
 
@@ -205,18 +222,6 @@ export function createOutboxMessage(overrides?: Partial<OutboxMessage>): OutboxM
     nextAttemptAt: null,
     createdAt: now,
     updatedAt: now,
-    ...overrides,
-  };
-}
-
-export function createOutboxEnqueueCommand(overrides?: Partial<OutboxEnqueueCommand>): OutboxEnqueueCommand {
-  return {
-    scope: 'tenant',
-    tenantId: 'tenant-1',
-    eventSource: 'order',
-    eventType: 'created',
-    occurrenceId: randomUUID(),
-    payload: { orderId: 'order-1' },
     ...overrides,
   };
 }

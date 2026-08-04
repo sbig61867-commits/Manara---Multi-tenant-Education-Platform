@@ -1,14 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { InvalidOutboxMessageError } from '../../src/outbox/domain/errors.js';
-import {
-  isJsonSafeValue,
-  isSensitiveKey,
-  normalizeKey,
-  REDACTED_VALUE,
-  sanitizeErrorMessage,
-  sanitizeOutboxPayload,
-} from '../../src/outbox/application/payload-sanitizer.js';
+import { InvalidOutboxMessageError, isJsonSafeValue, isSensitiveKey, normalizeKey, REDACTED_VALUE, sanitizeErrorMessage, sanitizeOutboxPayload } from '@manara/outbox';
 
 test('normalizeKey strips separators and lowercases', () => {
   assert.equal(normalizeKey('accessToken'), 'accesstoken');

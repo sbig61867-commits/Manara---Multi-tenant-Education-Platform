@@ -1,5 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import type { PostgresDatabase } from '@manara/database';
+import { OutboxModule } from '@manara/outbox';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { DATABASE } from './database/database.constants.js';
@@ -7,7 +8,6 @@ import { DatabaseLifecycle } from './database/database.lifecycle.js';
 import { EntitlementsModule } from './entitlements/entitlements.module.js';
 import { HealthController } from './health/health.controller.js';
 import { IdentityModule } from './identity/identity.module.js';
-import { OutboxModule } from './outbox/outbox.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 
 export interface AppModuleOptions {
