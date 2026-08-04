@@ -6,7 +6,7 @@ import {
   OUTBOX_RETRY_DELAYS_MS,
   outboxAttemptsExhausted,
   outboxRetryDelayMs,
-} from '../../src/outbox/application/backoff.js';
+} from '@manara/outbox';
 
 test('outbox exposes the documented delivery schedule', () => {
   assert.equal(OUTBOX_MAX_ATTEMPTS, 5);

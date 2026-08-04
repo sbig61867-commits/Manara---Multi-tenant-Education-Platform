@@ -22,7 +22,7 @@ export type DatabaseHealth = z.infer<typeof databaseHealthSchema>;
 
 export const readinessSchema = z.object({
   status: z.enum(['ready', 'unavailable']),
-  service: z.literal('api'),
+  service: z.enum(['api', 'worker']),
   version: z.string(),
   timestamp: z.string(),
   database: databaseHealthSchema,

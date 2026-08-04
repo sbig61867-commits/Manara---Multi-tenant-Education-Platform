@@ -19,10 +19,34 @@ export const apiEnvSchema = baseEnvSchema.extend({
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 });
 
-export const workerEnvSchema = baseEnvSchema.extend({
-  WORKER_HOST: z.string().min(1).default('0.0.0.0'),
-  WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
-});
+export const workerEnvSchema = baseEnvSchema
+  .extend({
+    WORKER_HOST: z.string().min(1).default('0.0.0.0'),
+    WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+    WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(250).max(3_600_000).default(5_000),
+    WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+    WORKER_CLAIM_LEASE_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(300_000),
+    WORKER_STALE_CLAIM_RELEASE_INTERVAL_MS: z.coerce.number().int().min(1_000).max(86_400_000).default(60_000),
+    WORKER_SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(10_000),
+    WORKER_CLAIM_SCOPE: z.enum(['platform', 'tenant']).default('platform'),
+    WORKER_CLAIM_TENANT_ID: z.string().min(1).optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.WORKER_CLAIM_SCOPE === 'tenant' && (value.WORKER_CLAIM_TENANT_ID === undefined || value.WORKER_CLAIM_TENANT_ID === '')) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['WORKER_CLAIM_TENANT_ID'],
+        message: 'WORKER_CLAIM_TENANT_ID is required when WORKER_CLAIM_SCOPE is tenant',
+      });
+    }
+    if (value.WORKER_CLAIM_SCOPE === 'platform' && value.WORKER_CLAIM_TENANT_ID !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['WORKER_CLAIM_TENANT_ID'],
+        message: 'WORKER_CLAIM_TENANT_ID must not be set when WORKER_CLAIM_SCOPE is platform',
+      });
+    }
+  });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

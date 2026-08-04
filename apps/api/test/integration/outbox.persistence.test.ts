@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { MigrationRunner, type PostgresDatabase } from '@manara/database';
-import { OUTBOX_DEFAULT_CLAIM_LEASE_MS } from '../../src/outbox/application/backoff.js';
-import { PostgresDeadLetterRepository } from '../../src/outbox/adapters/postgres-dead-letter.repository.js';
-import { PostgresOutboxRepository } from '../../src/outbox/adapters/postgres-outbox.repository.js';
-import { OutboxService } from '../../src/outbox/application/outbox.service.js';
-import { NoopOutboxEventPublisher } from '../../src/outbox/domain/events.js';
-import type { OutboxEnqueueCommand, OutboxMessage } from '../../src/outbox/domain/types.js';
-import type { OutboxClock } from '../../src/outbox/ports/outbox-clock.js';
+import {
+  NoopOutboxEventPublisher,
+  OUTBOX_DEFAULT_CLAIM_LEASE_MS,
+  OutboxService,
+  PostgresDeadLetterRepository,
+  PostgresOutboxRepository,
+} from '@manara/outbox';
+import type { OutboxClock, OutboxEnqueueCommand, OutboxMessage } from '@manara/outbox';
 import { createTestDatabase, getTestDatabaseUrl, MIGRATIONS_DIR } from './helpers.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping integration tests' : false;

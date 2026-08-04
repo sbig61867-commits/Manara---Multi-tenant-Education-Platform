@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { deriveOutboxEventId } from '../../src/outbox/application/event-id.js';
+import { deriveOutboxEventId } from '@manara/outbox';
 
 test('deriveOutboxEventId embeds the tenant id for tenant-scoped events', () => {
   const id = deriveOutboxEventId({
