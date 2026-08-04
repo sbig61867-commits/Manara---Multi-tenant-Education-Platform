@@ -1,5 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import type { PostgresDatabase } from '@manara/database';
+import { AuditModule } from './audit/audit.module.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { DATABASE } from './database/database.constants.js';
 import { DatabaseLifecycle } from './database/database.lifecycle.js';
@@ -28,6 +29,7 @@ export class AppModule {
               TenantModule.forRoot(options.database),
               AuthorizationModule.forRoot(options.database),
               EntitlementsModule.forRoot(options.database),
+              AuditModule.forRoot(options.database),
             ],
       providers: [{ provide: DATABASE, useValue: options.database }],
     };
