@@ -7,6 +7,7 @@ import { DatabaseLifecycle } from './database/database.lifecycle.js';
 import { EntitlementsModule } from './entitlements/entitlements.module.js';
 import { HealthController } from './health/health.controller.js';
 import { IdentityModule } from './identity/identity.module.js';
+import { OutboxModule } from './outbox/outbox.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 
 export interface AppModuleOptions {
@@ -30,6 +31,7 @@ export class AppModule {
               AuthorizationModule.forRoot(options.database),
               EntitlementsModule.forRoot(options.database),
               AuditModule.forRoot(options.database),
+              OutboxModule.forRoot(options.database),
             ],
       providers: [{ provide: DATABASE, useValue: options.database }],
     };
