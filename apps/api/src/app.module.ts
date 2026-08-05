@@ -1,6 +1,8 @@
 import { Module, type DynamicModule } from '@nestjs/common';
+import type { ApiEnv } from '@manara/config';
 import type { PostgresDatabase } from '@manara/database';
 import { OutboxModule } from '@manara/outbox';
+import { AuthModule } from './auth/auth.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { DATABASE } from './database/database.constants.js';
@@ -8,11 +10,11 @@ import { DatabaseLifecycle } from './database/database.lifecycle.js';
 import { EntitlementsModule } from './entitlements/entitlements.module.js';
 import { HealthController } from './health/health.controller.js';
 import { HttpModule } from './http/http.module.js';
-import { IdentityModule } from './identity/identity.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 
 export interface AppModuleOptions {
   database: PostgresDatabase | null;
+  config: ApiEnv;
 }
 
 @Module({
@@ -28,7 +30,7 @@ export class AppModule {
         options.database === null
           ? []
           : [
-              IdentityModule.forRoot(options.database),
+              AuthModule.forRoot({ database: options.database, config: options.config }),
               TenantModule.forRoot(options.database),
               AuthorizationModule.forRoot(options.database),
               EntitlementsModule.forRoot(options.database),
