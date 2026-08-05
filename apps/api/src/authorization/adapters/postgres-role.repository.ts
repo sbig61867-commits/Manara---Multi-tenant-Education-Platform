@@ -1,4 +1,5 @@
 import type { TransactionalExecutor } from '@manara/database';
+import { decodeCursor } from '../../tenant/pagination.js';
 import type { Role, RolePermissionGrant } from '../domain/types.js';
 import type { RoleRepository } from '../ports/role.repository.js';
 
@@ -91,6 +92,20 @@ export class PostgresRoleRepository implements RoleRepository {
     return result.rows.map((row) => mapRole(row) as Role);
   }
 
+  async listByTenantPage(tenantId: string, options: { limit: number; cursor: string | null }): Promise<Role[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const params: unknown[] = [tenantId];
+    let sql = `SELECT ${ROLE_COLUMNS} FROM roles WHERE tenant_id = $1`;
+    if (cursor !== null) {
+      params.push(cursor.createdAt, cursor.id);
+      sql += ` AND (created_at, id) < ($2, $3)`;
+    }
+    params.push(options.limit);
+    sql += ` ORDER BY created_at DESC, id DESC LIMIT $${params.length}`;
+    const result = await this.database.query<RoleRow>(sql, params);
+    return result.rows.map((row) => mapRole(row) as Role);
+  }
+
   async update(role: Role): Promise<void> {
     await this.database.query(
       `UPDATE roles
@@ -127,6 +142,23 @@ export class PostgresRoleRepository implements RoleRepository {
        ORDER BY rp.role_id, p.key`,
       [[...roleIds]],
     );
+    return result.rows.map((row) => mapGrant(row) as RolePermissionGrant);
+  }
+
+  async listGrantsByRolePage(roleId: string, options: { limit: number; cursor: string | null }): Promise<RolePermissionGrant[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const params: unknown[] = [roleId];
+    let sql = `SELECT rp.role_id, rp.permission_id, p.key AS permission_key, rp.granted_at
+               FROM role_permissions rp
+               JOIN permissions p ON p.id = rp.permission_id
+               WHERE rp.role_id = $1`;
+    if (cursor !== null) {
+      params.push(cursor.createdAt, cursor.id);
+      sql += ` AND (rp.granted_at, rp.permission_id) < ($2, $3)`;
+    }
+    params.push(options.limit);
+    sql += ` ORDER BY rp.granted_at DESC, rp.permission_id DESC LIMIT $${params.length}`;
+    const result = await this.database.query<RolePermissionGrantRow>(sql, params);
     return result.rows.map((row) => mapGrant(row) as RolePermissionGrant);
   }
 }

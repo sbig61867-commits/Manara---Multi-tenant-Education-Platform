@@ -92,6 +92,12 @@ export class FakeMembershipRepository implements MembershipRepository {
     return filtered.slice(0, options.limit);
   }
 
+  async listActiveByUser(userId: string): Promise<Membership[]> {
+    return [...this.memberships.values()]
+      .filter((membership) => membership.userId === userId && membership.status === 'active')
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1));
+  }
+
   async update(membership: Membership): Promise<void> {
     this.memberships.set(membership.id, membership);
   }

@@ -10,5 +10,6 @@ export interface MembershipRepository {
   findById(id: string): Promise<Membership | null>;
   findByUserAndInstitution(userId: string, institutionId: string): Promise<Membership | null>;
   listByInstitution(institutionId: string, options: MembershipListOptions): Promise<Membership[]>;
+  listActiveByUser(userId: string): Promise<Membership[]>;
   update(membership: Membership): Promise<void>;
 }

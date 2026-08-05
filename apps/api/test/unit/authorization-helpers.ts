@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
+import { decodeCursor } from '../../src/tenant/pagination.js';
 import type { AuthorizationEvent, AuthorizationEventPublisher } from '../../src/authorization/domain/events.js';
 import type {
   AuthorizationContext,
@@ -45,6 +46,22 @@ export class FakeRoleRepository implements RoleRepository {
     return [...this.roles.values()].filter((role) => role.tenantId === tenantId);
   }
 
+  async listByTenantPage(tenantId: string, options: { limit: number; cursor: string | null }): Promise<Role[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const rows = [...this.roles.values()]
+      .filter((role) => role.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1));
+    const filtered =
+      cursor === null
+        ? rows
+        : rows.filter(
+            (role) =>
+              role.createdAt.getTime() < cursor.createdAt.getTime() ||
+              (role.createdAt.getTime() === cursor.createdAt.getTime() && role.id < cursor.id),
+          );
+    return filtered.slice(0, options.limit);
+  }
+
   async update(role: Role): Promise<void> {
     this.roles.set(role.id, role);
   }
@@ -61,6 +78,22 @@ export class FakeRoleRepository implements RoleRepository {
     const wanted = new Set(roleIds);
     return [...this.grants.values()].filter((grant) => wanted.has(grant.roleId));
   }
+
+  async listGrantsByRolePage(roleId: string, options: { limit: number; cursor: string | null }): Promise<RolePermissionGrant[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const rows = [...this.grants.values()]
+      .filter((grant) => grant.roleId === roleId)
+      .sort((a, b) => b.grantedAt.getTime() - a.grantedAt.getTime() || (a.permissionId < b.permissionId ? 1 : -1));
+    const filtered =
+      cursor === null
+        ? rows
+        : rows.filter(
+            (grant) =>
+              grant.grantedAt.getTime() < cursor.createdAt.getTime() ||
+              (grant.grantedAt.getTime() === cursor.createdAt.getTime() && grant.permissionId < cursor.id),
+          );
+    return filtered.slice(0, options.limit);
+  }
 }
 
 export class FakePermissionRepository implements PermissionRepository {
@@ -68,6 +101,28 @@ export class FakePermissionRepository implements PermissionRepository {
 
   async findByKey(key: string): Promise<Permission | null> {
     return this.permissions.get(key) ?? null;
+  }
+
+  async list(options: { limit: number; cursor: string | null; module?: string | null }): Promise<Permission[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const rows = [...this.permissions.values()]
+      .filter(
+        (permission) =>
+          options.module === undefined ||
+          options.module === null ||
+          options.module === '' ||
+          permission.module === options.module,
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1));
+    const filtered =
+      cursor === null
+        ? rows
+        : rows.filter(
+            (permission) =>
+              permission.createdAt.getTime() < cursor.createdAt.getTime() ||
+              (permission.createdAt.getTime() === cursor.createdAt.getTime() && permission.id < cursor.id),
+          );
+    return filtered.slice(0, options.limit);
   }
 }
 
@@ -90,6 +145,22 @@ export class FakeRoleAssignmentRepository implements RoleAssignmentRepository {
     return [...this.assignments.values()].filter(
       (assignment) => assignment.userId === userId && assignment.tenantId === tenantId,
     );
+  }
+
+  async listByTenantPage(tenantId: string, options: { limit: number; cursor: string | null }): Promise<RoleAssignment[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const rows = [...this.assignments.values()]
+      .filter((assignment) => assignment.tenantId === tenantId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1));
+    const filtered =
+      cursor === null
+        ? rows
+        : rows.filter(
+            (assignment) =>
+              assignment.createdAt.getTime() < cursor.createdAt.getTime() ||
+              (assignment.createdAt.getTime() === cursor.createdAt.getTime() && assignment.id < cursor.id),
+          );
+    return filtered.slice(0, options.limit);
   }
 }
 

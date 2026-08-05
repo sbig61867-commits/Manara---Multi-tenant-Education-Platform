@@ -85,6 +85,14 @@ export class PostgresMembershipRepository implements MembershipRepository {
     return result.rows.map((row) => mapMembership(row) as Membership);
   }
 
+  async listActiveByUser(userId: string): Promise<Membership[]> {
+    const result = await this.database.query<MembershipRow>(
+      `SELECT ${MEMBERSHIP_COLUMNS} FROM memberships WHERE user_id = $1 AND status = 'active' ORDER BY created_at DESC`,
+      [userId],
+    );
+    return result.rows.map((row) => mapMembership(row) as Membership);
+  }
+
   async update(membership: Membership): Promise<void> {
     await this.database.query(
       `UPDATE memberships

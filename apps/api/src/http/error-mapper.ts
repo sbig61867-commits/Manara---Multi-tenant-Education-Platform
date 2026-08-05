@@ -29,7 +29,7 @@ export interface MappedHttpError {
  * | Rule | HTTP |
  * |---|---|
  * | code ends with `.not_found` | 404 |
- * | code ends with `.already_exists`, `.already_active`, `.conflict`, `.invalid_transition`, `.rejected` | 409 |
+ * | code ends with `.already_exists`, `.already_active`, `.already_granted`, `.not_granted`, `.conflict`, `.invalid_transition`, `.rejected` | 409 |
  * | code starts with `auth.`, `session.`, `credential.` | 401 |
  * | code starts with `authorization.`, `permission.` | 403 |
  * | code starts with `quota.`, `rate.` | 429 |
@@ -58,6 +58,10 @@ function statusForCode(code: string): number {
     code.endsWith('_already_exists') ||
     code.endsWith('.already_active') ||
     code.endsWith('_already_active') ||
+    code.endsWith('.already_granted') ||
+    code.endsWith('_already_granted') ||
+    code.endsWith('.not_granted') ||
+    code.endsWith('_not_granted') ||
     code.endsWith('.conflict') ||
     code.endsWith('_conflict') ||
     code.endsWith('.invalid_transition') ||

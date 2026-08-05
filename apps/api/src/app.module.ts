@@ -5,6 +5,7 @@ import { OutboxModule } from '@manara/outbox';
 import { AuthModule } from './auth/auth.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
+import { AuthorizationHttpModule } from './authorizations/authorization.module.js';
 import { DATABASE } from './database/database.constants.js';
 import { DatabaseLifecycle } from './database/database.lifecycle.js';
 import { EntitlementsModule } from './entitlements/entitlements.module.js';
@@ -35,6 +36,7 @@ export class AppModule {
               TenantModule.forRoot(options.database),
               TenantHttpModule.forRoot({ database: options.database, config: options.config }),
               AuthorizationModule.forRoot(options.database),
+              AuthorizationHttpModule.forRoot({ database: options.database, config: options.config }),
               EntitlementsModule.forRoot(options.database),
               AuditModule.forRoot(options.database),
               OutboxModule.forRoot(options.database),
