@@ -30,7 +30,15 @@ import {
     { provide: INVITATION_TOKEN_HASHER, useClass: Sha256TokenHasher },
     { provide: TENANT_EVENT_PUBLISHER, useClass: NoopTenantEventPublisher },
   ],
-  exports: [InstitutionService, MembershipService, InvitationService],
+  exports: [
+    InstitutionService,
+    MembershipService,
+    InvitationService,
+    INSTITUTION_REPOSITORY,
+    MEMBERSHIP_REPOSITORY,
+    INVITATION_REPOSITORY,
+    INVITATION_TOKEN_HASHER,
+  ],
 })
 export class TenantModule {
   static forRoot(database: PostgresDatabase | null): DynamicModule {

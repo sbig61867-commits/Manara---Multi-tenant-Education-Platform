@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { encodeCursor } from '../pagination.js';
 import {
   InvitationAcceptanceRejectedError,
   InvitationAlreadyHandledError,
@@ -48,6 +49,17 @@ export interface AcceptanceOutcome {
   membership: Membership;
   activated: boolean;
   previousStatus: MembershipStatus | null;
+}
+
+export interface ListInvitationsCommand {
+  institutionId: string;
+  limit: number;
+  cursor: string | null;
+}
+
+export interface InvitationListResult {
+  items: Invitation[];
+  nextCursor: string | null;
 }
 
 @Injectable()
@@ -157,6 +169,19 @@ export class InvitationService {
 
   async revokeInvitation(command: InvitationIdCommand): Promise<Invitation> {
     return this.handleInvitation(command.invitationId, 'revoked');
+  }
+
+  async listInvitations(command: ListInvitationsCommand): Promise<InvitationListResult> {
+    const tenantId = requireTenantContext(this.tenantContext);
+    assertSameTenant(command.institutionId, tenantId);
+    const rows = await this.invitations.listByInstitution(command.institutionId, {
+      limit: command.limit + 1,
+      cursor: command.cursor,
+    });
+    const items = rows.slice(0, command.limit);
+    const last = items[items.length - 1];
+    const nextCursor = rows.length > command.limit && last !== undefined ? encodeCursor(last.createdAt, last.id) : null;
+    return { items, nextCursor };
   }
 
   async expireInvitation(command: InvitationIdCommand): Promise<Invitation> {

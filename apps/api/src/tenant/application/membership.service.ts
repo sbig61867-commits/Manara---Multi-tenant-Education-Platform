@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { encodeCursor } from '../pagination.js';
 import {
   InvalidMembershipTransitionError,
   MembershipAlreadyExistsError,
@@ -27,6 +28,17 @@ export interface CreateMembershipCommand {
 export interface ChangeMembershipStatusCommand {
   membershipId: string;
   to: MembershipStatus;
+}
+
+export interface ListMembershipsCommand {
+  institutionId: string;
+  limit: number;
+  cursor: string | null;
+}
+
+export interface MembershipListResult {
+  items: Membership[];
+  nextCursor: string | null;
 }
 
 const MEMBERSHIP_TRANSITIONS: Record<MembershipStatus, readonly MembershipStatus[]> = {
@@ -107,6 +119,19 @@ export class MembershipService {
       to: command.to,
     });
     return updated;
+  }
+
+  async listMemberships(command: ListMembershipsCommand): Promise<MembershipListResult> {
+    const tenantId = requireTenantContext(this.tenantContext);
+    assertSameTenant(command.institutionId, tenantId);
+    const rows = await this.memberships.listByInstitution(command.institutionId, {
+      limit: command.limit + 1,
+      cursor: command.cursor,
+    });
+    const items = rows.slice(0, command.limit);
+    const last = items[items.length - 1];
+    const nextCursor = rows.length > command.limit && last !== undefined ? encodeCursor(last.createdAt, last.id) : null;
+    return { items, nextCursor };
   }
 
   private assertAllowedTransition(from: MembershipStatus, to: MembershipStatus): void {

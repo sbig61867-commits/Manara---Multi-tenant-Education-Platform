@@ -207,3 +207,22 @@ test('throws when the institution does not exist', async () => {
     (error: unknown) => error instanceof InstitutionNotFoundError,
   );
 });
+
+test('gets an existing institution', async () => {
+  const { service, institutions } = createService();
+  const institution = createInstitution();
+  await institutions.create(institution);
+  const fetched = await service.getInstitution({ institutionId: institution.id });
+  assert.equal(fetched.id, institution.id);
+  assert.equal(fetched.name, institution.name);
+  assert.equal(fetched.type, institution.type);
+  assert.equal(fetched.status, institution.status);
+});
+
+test('getInstitution throws when the institution does not exist', async () => {
+  const { service } = createService();
+  await assert.rejects(
+    () => service.getInstitution({ institutionId: 'missing' }),
+    (error: unknown) => error instanceof InstitutionNotFoundError,
+  );
+});

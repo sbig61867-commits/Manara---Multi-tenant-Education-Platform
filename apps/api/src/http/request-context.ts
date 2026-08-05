@@ -50,7 +50,11 @@ export function updateRequestContext(fields: Partial<Pick<RequestContext, 'authe
   if (current === undefined) {
     return;
   }
-  storage.enterWith({ ...current, ...fields });
+  // The context object is created per request and shared (by reference) with
+  // the whole request pipeline, so mutating it makes the update visible to
+  // guards, interceptors, and handlers alike. enterWith would only reach the
+  // async subtree where the update was called.
+  Object.assign(current, fields);
 }
 
 @Injectable()
