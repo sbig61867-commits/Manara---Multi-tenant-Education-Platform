@@ -10,12 +10,17 @@
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
-    "test": "npm run test:unit && npm run test:integration",
+    "test": "npm run test:unit && npm run test:smoke && npm run test:integration",
     "test:unit": "tsx --test test/unit/*.test.ts",
+    "test:smoke": "tsx --test test/smoke/*.test.ts",
     "test:integration": "tsx --test --test-concurrency=1 test/integration/*.test.ts",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/helmet": "^13.1.0",
+    "@fastify/static": "^9.3.0",
     "@manara/config": "*",
     "@manara/contracts": "*",
     "@manara/database": "*",
@@ -24,17 +29,21 @@
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",
     "@nestjs/platform-fastify": "^11.1.28",
+    "@nestjs/swagger": "^11.4.6",
     "fastify": "^5.10.0",
     "hash-wasm": "^4.12.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@manara/eslint-config": "*",
     "@manara/tsconfig": "*",
     "@nestjs/cli": "^11.0.24",
+    "@nestjs/testing": "^11.1.28",
     "@types/node": "^24.13.3",
     "eslint": "^9.39.5",
+    "pino": "^9.0.0",
     "tsx": "^4.23.5",
     "typescript": "^5.9.3"
   }

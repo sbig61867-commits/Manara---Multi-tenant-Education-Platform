@@ -17,6 +17,15 @@ export const baseEnvSchema = z.object({
 export const apiEnvSchema = baseEnvSchema.extend({
   API_HOST: z.string().min(1).default('0.0.0.0'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  API_CORS_ORIGINS: z.string().default(''),
+  API_BODY_LIMIT_BYTES: z.coerce.number().int().min(1024).max(104_857_600).default(1_048_576),
+  API_ENABLE_DOCS: z.enum(['auto', 'true', 'false']).default('auto'),
+  API_COOKIE_SECURE: z.enum(['auto', 'true', 'false']).default('auto'),
+  API_COOKIE_NAME: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).default('manara_session'),
+  API_TRUST_PROXY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
 export const workerEnvSchema = baseEnvSchema
