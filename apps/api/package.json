@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "test": "npm run test:unit && npm run test:smoke && npm run test:integration",
     "test:unit": "tsx --test test/unit/*.test.ts",
-    "test:smoke": "tsx --test test/smoke/*.test.ts",
+    "test:smoke": "tsx --test --test-concurrency=1 test/smoke/*.test.ts",
     "test:integration": "tsx --test --test-concurrency=1 test/integration/*.test.ts",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },

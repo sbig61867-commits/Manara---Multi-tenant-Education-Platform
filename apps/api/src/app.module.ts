@@ -11,6 +11,7 @@ import { EntitlementsModule } from './entitlements/entitlements.module.js';
 import { HealthController } from './health/health.controller.js';
 import { HttpModule } from './http/http.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
+import { TenantHttpModule } from './tenants/tenant.module.js';
 
 export interface AppModuleOptions {
   database: PostgresDatabase | null;
@@ -32,6 +33,7 @@ export class AppModule {
           : [
               AuthModule.forRoot({ database: options.database, config: options.config }),
               TenantModule.forRoot(options.database),
+              TenantHttpModule.forRoot({ database: options.database, config: options.config }),
               AuthorizationModule.forRoot(options.database),
               EntitlementsModule.forRoot(options.database),
               AuditModule.forRoot(options.database),

@@ -1,4 +1,5 @@
 import type { TransactionalExecutor } from '@manara/database';
+import { decodeCursor } from '../pagination.js';
 import type { Invitation } from '../domain/types.js';
 import type { InvitationRepository } from '../ports/invitation.repository.js';
 
@@ -69,6 +70,23 @@ export class PostgresInvitationRepository implements InvitationRepository {
       [tokenHash],
     );
     return mapInvitation(result.rows[0]);
+  }
+
+  async listByInstitution(
+    institutionId: string,
+    options: { limit: number; cursor: string | null },
+  ): Promise<Invitation[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const params: unknown[] = [institutionId];
+    let sql = `SELECT ${INVITATION_COLUMNS} FROM invitations WHERE tenant_id = $1`;
+    if (cursor !== null) {
+      params.push(cursor.createdAt, cursor.id);
+      sql += ` AND (created_at, id) < ($2, $3)`;
+    }
+    params.push(options.limit);
+    sql += ` ORDER BY created_at DESC, id DESC LIMIT $${params.length}`;
+    const result = await this.database.query<InvitationRow>(sql, params);
+    return result.rows.map((row) => mapInvitation(row) as Invitation);
   }
 
   async update(invitation: Invitation): Promise<void> {

@@ -14,6 +14,7 @@ import type { InvitationRepository } from '../../src/tenant/ports/invitation.rep
 import type { MembershipRepository } from '../../src/tenant/ports/membership.repository.js';
 import type { TenantTransactionRunner } from '../../src/tenant/ports/transaction-runner.js';
 import type { TenantContextResolver } from '../../src/tenant/ports/tenant-context.js';
+import { decodeCursor } from '../../src/tenant/pagination.js';
 
 export class FakeInstitutionRepository implements InstitutionRepository {
   readonly institutions = new Map<string, Institution>();
@@ -72,6 +73,25 @@ export class FakeMembershipRepository implements MembershipRepository {
     return null;
   }
 
+  async listByInstitution(
+    institutionId: string,
+    options: { limit: number; cursor: string | null },
+  ): Promise<Membership[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const rows = [...this.memberships.values()]
+      .filter((membership) => membership.institutionId === institutionId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1));
+    const filtered =
+      cursor === null
+        ? rows
+        : rows.filter(
+            (membership) =>
+              membership.createdAt.getTime() < cursor.createdAt.getTime() ||
+              (membership.createdAt.getTime() === cursor.createdAt.getTime() && membership.id < cursor.id),
+          );
+    return filtered.slice(0, options.limit);
+  }
+
   async update(membership: Membership): Promise<void> {
     this.memberships.set(membership.id, membership);
   }
@@ -95,6 +115,25 @@ export class FakeInvitationRepository implements InvitationRepository {
       }
     }
     return null;
+  }
+
+  async listByInstitution(
+    institutionId: string,
+    options: { limit: number; cursor: string | null },
+  ): Promise<Invitation[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const rows = [...this.invitations.values()]
+      .filter((invitation) => invitation.institutionId === institutionId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1));
+    const filtered =
+      cursor === null
+        ? rows
+        : rows.filter(
+            (invitation) =>
+              invitation.createdAt.getTime() < cursor.createdAt.getTime() ||
+              (invitation.createdAt.getTime() === cursor.createdAt.getTime() && invitation.id < cursor.id),
+          );
+    return filtered.slice(0, options.limit);
   }
 
   async update(invitation: Invitation): Promise<void> {

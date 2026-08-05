@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { randomUUID } from 'node:crypto';
 import { InvitationService } from '../../src/tenant/application/invitation.service.js';
 import {
   InvitationAcceptanceRejectedError,
@@ -363,6 +364,77 @@ test('denies a cross-tenant revoke', async () => {
   await invitations.create(invitation);
   await assert.rejects(
     () => service.revokeInvitation({ invitationId: invitation.id }),
+    (error: unknown) => error instanceof TenantContextMismatchError,
+  );
+});
+
+test('lists invitations newest first with their internal token hashes', async () => {
+  const { service, invitations } = createService();
+  const now = Date.now();
+  for (let index = 0; index < 3; index += 1) {
+    await invitations.create({
+      id: randomUUID(),
+      institutionId: TENANT,
+      tokenHash: sha256(`raw-token-${index}`),
+      status: 'pending',
+      expiresAt: future(),
+      createdAt: new Date(now + index * 1000),
+      acceptedByUserId: null,
+      acceptedAt: null,
+      revokedAt: null,
+    });
+  }
+  const result = await service.listInvitations({ institutionId: TENANT, limit: 10, cursor: null });
+  assert.equal(result.items.length, 3);
+  assert.equal(result.nextCursor, null);
+  assert.ok(result.items[0]?.createdAt.getTime() >= result.items[1]!.createdAt.getTime());
+  assert.ok(result.items[0]!.tokenHash.length > 0);
+});
+
+test('pages invitations with an opaque cursor', async () => {
+  const { service, invitations } = createService();
+  const now = Date.now();
+  const created: Array<{ id: string; createdAt: Date }> = [];
+  for (let index = 0; index < 5; index += 1) {
+    const id = randomUUID();
+    await invitations.create({
+      id,
+      institutionId: TENANT,
+      tokenHash: sha256(`raw-token-${index}`),
+      status: 'pending',
+      expiresAt: future(),
+      createdAt: new Date(now + index * 1000),
+      acceptedByUserId: null,
+      acceptedAt: null,
+      revokedAt: null,
+    });
+    created.push({ id, createdAt: new Date(now + index * 1000) });
+  }
+  const first = await service.listInvitations({ institutionId: TENANT, limit: 2, cursor: null });
+  assert.equal(first.items.length, 2);
+  assert.ok(first.nextCursor);
+  const second = await service.listInvitations({ institutionId: TENANT, limit: 2, cursor: first.nextCursor });
+  assert.equal(second.items.length, 2);
+  assert.ok(second.nextCursor);
+  const third = await service.listInvitations({ institutionId: TENANT, limit: 2, cursor: second.nextCursor });
+  assert.equal(third.items.length, 1);
+  assert.equal(third.nextCursor, null);
+  const seen = new Set([...first.items, ...second.items, ...third.items].map((item) => item.id));
+  assert.equal(seen.size, 5);
+});
+
+test('listing invitations fails closed without tenant context', async () => {
+  const { service } = createService(null);
+  await assert.rejects(
+    () => service.listInvitations({ institutionId: TENANT, limit: 10, cursor: null }),
+    (error: unknown) => error instanceof MissingTenantContextError,
+  );
+});
+
+test('listing invitations denies a cross-tenant target', async () => {
+  const { service } = createService('institution-other');
+  await assert.rejects(
+    () => service.listInvitations({ institutionId: TENANT, limit: 10, cursor: null }),
     (error: unknown) => error instanceof TenantContextMismatchError,
   );
 });

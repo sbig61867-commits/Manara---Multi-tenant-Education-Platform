@@ -19,6 +19,10 @@ export interface CreateInstitutionCommand {
   createdByUserId: string;
 }
 
+export interface GetInstitutionCommand {
+  institutionId: string;
+}
+
 export interface LifecycleTransitionCommand {
   institutionId: string;
   actorUserId: string;
@@ -75,6 +79,14 @@ export class InstitutionService {
       name: institution.name,
       createdByUserId: command.createdByUserId,
     });
+    return institution;
+  }
+
+  async getInstitution(command: GetInstitutionCommand): Promise<Institution> {
+    const institution = await this.institutions.findById(command.institutionId);
+    if (institution === null) {
+      throw new InstitutionNotFoundError('Institution not found');
+    }
     return institution;
   }
 

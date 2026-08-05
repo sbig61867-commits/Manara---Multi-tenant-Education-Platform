@@ -199,3 +199,57 @@ test('fails closed on membership status change without context', async () => {
     (error: unknown) => error instanceof MissingTenantContextError,
   );
 });
+
+test('lists memberships for the tenant context only', async () => {
+  const { service, memberships } = createService();
+  const other = createMembership({ id: 'membership-other', institutionId: 'institution-other' });
+  await memberships.create(other);
+  const first = createMembership({ id: 'membership-1', createdAt: new Date(Date.now() - 2000) });
+  const second = createMembership({ id: 'membership-2', createdAt: new Date(Date.now() - 1000) });
+  await memberships.create(first);
+  await memberships.create(second);
+  const result = await service.listMemberships({ institutionId: TENANT, limit: 10, cursor: null });
+  assert.deepEqual(
+    result.items.map((item) => item.id),
+    ['membership-2', 'membership-1'],
+  );
+  assert.equal(result.nextCursor, null);
+});
+
+test('pages memberships with an opaque cursor', async () => {
+  const { service, memberships } = createService();
+  const now = Date.now();
+  const ids: string[] = [];
+  for (let index = 0; index < 5; index += 1) {
+    const id = `membership-page-${index}`;
+    await memberships.create(createMembership({ id, createdAt: new Date(now + index * 1000) }));
+    ids.push(id);
+  }
+  const first = await service.listMemberships({ institutionId: TENANT, limit: 2, cursor: null });
+  assert.equal(first.items.length, 2);
+  assert.ok(first.nextCursor);
+  const second = await service.listMemberships({ institutionId: TENANT, limit: 2, cursor: first.nextCursor });
+  assert.equal(second.items.length, 2);
+  assert.ok(second.nextCursor);
+  const third = await service.listMemberships({ institutionId: TENANT, limit: 2, cursor: second.nextCursor });
+  assert.equal(third.items.length, 1);
+  assert.equal(third.nextCursor, null);
+  const seen = [...first.items, ...second.items, ...third.items].map((item) => item.id);
+  assert.equal(new Set(seen).size, 5);
+});
+
+test('listing memberships fails closed without tenant context', async () => {
+  const { service } = createService(null);
+  await assert.rejects(
+    () => service.listMemberships({ institutionId: TENANT, limit: 10, cursor: null }),
+    (error: unknown) => error instanceof MissingTenantContextError,
+  );
+});
+
+test('listing memberships denies a cross-tenant target', async () => {
+  const { service } = createService('institution-other');
+  await assert.rejects(
+    () => service.listMemberships({ institutionId: TENANT, limit: 10, cursor: null }),
+    (error: unknown) => error instanceof TenantContextMismatchError,
+  );
+});

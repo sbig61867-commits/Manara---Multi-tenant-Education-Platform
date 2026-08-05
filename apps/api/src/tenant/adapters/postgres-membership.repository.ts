@@ -1,4 +1,5 @@
 import type { TransactionalExecutor } from '@manara/database';
+import { decodeCursor } from '../pagination.js';
 import type { Membership } from '../domain/types.js';
 import type { MembershipRepository } from '../ports/membership.repository.js';
 
@@ -65,6 +66,23 @@ export class PostgresMembershipRepository implements MembershipRepository {
       [userId, institutionId],
     );
     return mapMembership(result.rows[0]);
+  }
+
+  async listByInstitution(
+    institutionId: string,
+    options: { limit: number; cursor: string | null },
+  ): Promise<Membership[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const params: unknown[] = [institutionId];
+    let sql = `SELECT ${MEMBERSHIP_COLUMNS} FROM memberships WHERE tenant_id = $1`;
+    if (cursor !== null) {
+      params.push(cursor.createdAt, cursor.id);
+      sql += ` AND (created_at, id) < ($2, $3)`;
+    }
+    params.push(options.limit);
+    sql += ` ORDER BY created_at DESC, id DESC LIMIT $${params.length}`;
+    const result = await this.database.query<MembershipRow>(sql, params);
+    return result.rows.map((row) => mapMembership(row) as Membership);
   }
 
   async update(membership: Membership): Promise<void> {
