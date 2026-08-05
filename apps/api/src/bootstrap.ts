@@ -24,7 +24,7 @@ export async function createApiApplication(config: ApiEnv): Promise<NestFastifyA
     : null;
 
   const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule.forRoot({ database }),
+    AppModule.forRoot({ database, config }),
     new FastifyAdapter({
       loggerInstance: logger,
       bodyLimit: config.API_BODY_LIMIT_BYTES,
