@@ -7,6 +7,7 @@ import { DATABASE } from './database/database.constants.js';
 import { DatabaseLifecycle } from './database/database.lifecycle.js';
 import { EntitlementsModule } from './entitlements/entitlements.module.js';
 import { HealthController } from './health/health.controller.js';
+import { HttpModule } from './http/http.module.js';
 import { IdentityModule } from './identity/identity.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 
@@ -15,6 +16,7 @@ export interface AppModuleOptions {
 }
 
 @Module({
+  imports: [HttpModule],
   controllers: [HealthController],
   providers: [DatabaseLifecycle],
 })

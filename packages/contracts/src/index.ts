@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const PACKAGE_VERSION = '0.1.0';
 
+export const API_VERSION = 'v1';
+
 export const healthSchema = z.object({
   status: z.literal('ok'),
   service: z.enum(['api', 'worker']),
@@ -36,6 +38,41 @@ export const cursorPaginationSchema = z.object({
 });
 
 export type CursorPagination = z.infer<typeof cursorPaginationSchema>;
+
+export const requestIdSchema = z
+  .string()
+  .min(8)
+  .max(64)
+  .regex(/^[A-Za-z0-9-]+$/, 'must contain only letters, digits, and hyphens');
+
+export type RequestId = z.infer<typeof requestIdSchema>;
+
+export const idempotencyKeySchema = z
+  .string()
+  .min(8)
+  .max(64)
+  .regex(/^[A-Za-z0-9._-]+$/, 'must contain only letters, digits, dots, underscores, and hyphens');
+
+export type IdempotencyKey = z.infer<typeof idempotencyKeySchema>;
+
+export const errorDetailSchema = z.object({
+  path: z.string(),
+  code: z.string(),
+  message: z.string(),
+});
+
+export type ErrorDetail = z.infer<typeof errorDetailSchema>;
+
+export const errorResponseSchema = z.object({
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    requestId: z.string().optional(),
+    details: z.array(errorDetailSchema).optional(),
+  }),
+});
+
+export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 
 export const emailSchema = z.string().trim().toLowerCase().min(1).max(254);
 
