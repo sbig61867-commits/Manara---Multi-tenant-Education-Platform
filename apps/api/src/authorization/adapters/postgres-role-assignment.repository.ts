@@ -1,4 +1,5 @@
 import type { TransactionalExecutor } from '@manara/database';
+import { decodeCursor } from '../../tenant/pagination.js';
 import type { RoleAssignment, RoleAssignmentScope } from '../domain/types.js';
 import type { RoleAssignmentRepository } from '../ports/role-assignment.repository.js';
 
@@ -85,6 +86,20 @@ export class PostgresRoleAssignmentRepository implements RoleAssignmentRepositor
       `SELECT ${ASSIGNMENT_COLUMNS} FROM role_assignments WHERE user_id = $1 AND tenant_id = $2 ORDER BY created_at`,
       [userId, tenantId],
     );
+    return result.rows.map((row) => mapAssignment(row) as RoleAssignment);
+  }
+
+  async listByTenantPage(tenantId: string, options: { limit: number; cursor: string | null }): Promise<RoleAssignment[]> {
+    const cursor = options.cursor === null ? null : decodeCursor(options.cursor);
+    const params: unknown[] = [tenantId];
+    let sql = `SELECT ${ASSIGNMENT_COLUMNS} FROM role_assignments WHERE tenant_id = $1`;
+    if (cursor !== null) {
+      params.push(cursor.createdAt, cursor.id);
+      sql += ` AND (created_at, id) < ($2, $3)`;
+    }
+    params.push(options.limit);
+    sql += ` ORDER BY created_at DESC, id DESC LIMIT $${params.length}`;
+    const result = await this.database.query<RoleAssignmentRow>(sql, params);
     return result.rows.map((row) => mapAssignment(row) as RoleAssignment);
   }
 }

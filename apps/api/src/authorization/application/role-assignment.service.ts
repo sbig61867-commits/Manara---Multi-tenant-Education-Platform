@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { encodeCursor } from '../../tenant/pagination.js';
 import {
   InvalidAssignmentScopeError,
   RoleAssignmentAlreadyExistsError,
@@ -28,6 +29,16 @@ export interface AssignRoleCommand {
 
 export interface RevokeRoleCommand {
   assignmentId: string;
+}
+
+export interface ListAssignmentsCommand {
+  limit: number;
+  cursor: string | null;
+}
+
+export interface AssignmentListResult {
+  items: RoleAssignment[];
+  nextCursor: string | null;
 }
 
 @Injectable()
@@ -87,6 +98,15 @@ export class RoleAssignmentService {
       userId: assignment.userId,
       change: 'revoked',
     });
+  }
+
+  async listAssignments(command: ListAssignmentsCommand): Promise<AssignmentListResult> {
+    const tenantId = requireTenantContext(this.contextResolver);
+    const rows = await this.assignments.listByTenantPage(tenantId, { limit: command.limit + 1, cursor: command.cursor });
+    const items = rows.slice(0, command.limit);
+    const last = items[items.length - 1];
+    const nextCursor = rows.length > command.limit && last !== undefined ? encodeCursor(last.createdAt, last.id) : null;
+    return { items, nextCursor };
   }
 
   private async requireRole(roleId: string): Promise<Role> {
