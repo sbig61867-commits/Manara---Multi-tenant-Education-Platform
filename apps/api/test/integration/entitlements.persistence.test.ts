@@ -15,18 +15,28 @@ import { PlanCatalogService } from '../../src/entitlements/application/plan-cata
 import { TenantEntitlementService } from '../../src/entitlements/application/tenant-entitlement.service.js';
 import {
   FeatureHardRestrictedError,
+  InvalidReservationOperationError,
   QuotaExceededError,
   ReservationNotFoundError,
   TenantAlreadyAssignedError,
   TenantContextMismatchError,
 } from '../../src/entitlements/domain/errors.js';
 import { NoopEntitlementEventPublisher } from '../../src/entitlements/domain/events.js';
+import type { UsageMeter } from '../../src/entitlements/domain/types.js';
 import { createTestDatabase, getTestDatabaseUrl, MIGRATIONS_DIR } from './helpers.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping integration tests' : false;
 
 function isPgErrorCode(error: unknown, code: string): boolean {
   return (error as { code?: string }).code === code;
+}
+
+function assertRejectedWith<T>(
+  result: PromiseSettledResult<T>,
+  errorType: new (...args: never[]) => Error,
+): void {
+  assert.equal(result.status, 'rejected');
+  assert.ok(result.reason instanceof errorType);
 }
 
 describe('entitlements persistence (integration)', { skip }, () => {
@@ -49,7 +59,7 @@ describe('entitlements persistence (integration)', { skip }, () => {
     userB = randomUUID();
     await database.query(
       'INSERT INTO users (id, email) VALUES ($1, $2), ($3, $4)',
-      [userA, 'ent-user-a@test.local', userB, 'ent-user-b@test.local'],
+      [userA, `ent-user-a-${randomUUID()}@test.local`, userB, `ent-user-b-${randomUUID()}@test.local`],
     );
     await database.query(
       'INSERT INTO institutions (id, name, type, status, created_by_user_id) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
@@ -531,6 +541,290 @@ describe('entitlements persistence (integration)', { skip }, () => {
     assert.equal(quota?.reserved, 20);
     assert.equal(quota?.consumed, 0);
     const meter = await ctx.meters.findById(reservation.reservationId);
+    assert.equal(meter?.kind, 'reserved');
+  });
+
+  test('concurrent reservations against an existing quota never exceed the limit', async () => {
+    const db = requireDb();
+    const ctx = createServices(db);
+    await seedEntitledTenant(db, { quotaLimit: 100 });
+    const now = new Date();
+    await ctx.quotas.create({
+      id: randomUUID(),
+      tenantId: tenantA,
+      quotaKey: 'ai_requests_monthly',
+      period: 'monthly',
+      limit: 100,
+      consumed: 0,
+      reserved: 0,
+      periodStart: now,
+      periodEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      updatedAt: now,
+    });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 2 }, (_, index) =>
+        AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+          ctx.evaluation.reserveUsage({
+            quotaKey: 'ai_requests_monthly',
+            amount: 60,
+            operationId: `reserve-existing-${index}`,
+          }),
+        ),
+      ),
+    );
+
+    const successful = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+    assert.equal(successful.length, 1);
+    assert.equal(rejected.length, 1);
+    for (const result of rejected) {
+      assertRejectedWith(result, QuotaExceededError);
+    }
+    const quota = await ctx.quotas.findByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const meters = await ctx.meters.listByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const reservedMeterTotal = meters
+      .filter((meter) => meter.kind === 'reserved')
+      .reduce((total, meter) => total + meter.amount, 0);
+    assert.equal(quota?.reserved, 60);
+    assert.equal(quota?.consumed, 0);
+    assert.ok((quota?.reserved ?? 0) + (quota?.consumed ?? 0) <= 100);
+    assert.equal(reservedMeterTotal, quota?.reserved);
+  });
+
+  test('concurrent first-use reservations create one quota row and never leak unique conflicts', async () => {
+    const db = requireDb();
+    const ctx = createServices(db);
+    await seedEntitledTenant(db, { quotaLimit: 100 });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 2 }, (_, index) =>
+        AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+          ctx.evaluation.reserveUsage({
+            quotaKey: 'ai_requests_monthly',
+            amount: 60,
+            operationId: `reserve-first-use-${index}`,
+          }),
+        ),
+      ),
+    );
+
+    const successful = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+    assert.equal(successful.length, 1);
+    assert.equal(rejected.length, 1);
+    for (const result of rejected) {
+      assertRejectedWith(result, QuotaExceededError);
+    }
+    const quotaRows = await db.query<{ count: string }>(
+      'SELECT count(*)::text AS count FROM usage_quotas WHERE tenant_id = $1 AND quota_key = $2',
+      [tenantA, 'ai_requests_monthly'],
+    );
+    assert.equal(Number(quotaRows.rows[0]?.count), 1);
+    const quota = await ctx.quotas.findByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const meters = await ctx.meters.listByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const reservedMeterTotal = meters
+      .filter((meter) => meter.kind === 'reserved')
+      .reduce((total, meter) => total + meter.amount, 0);
+    assert.equal(quota?.reserved, 60);
+    assert.ok((quota?.reserved ?? 0) + (quota?.consumed ?? 0) <= 100);
+    assert.equal(reservedMeterTotal, quota?.reserved);
+  });
+
+  test('concurrent recordUsage operations never consume beyond the limit', async () => {
+    const db = requireDb();
+    const ctx = createServices(db);
+    await seedEntitledTenant(db, { quotaLimit: 100 });
+    const now = new Date();
+    await ctx.quotas.create({
+      id: randomUUID(),
+      tenantId: tenantA,
+      quotaKey: 'ai_requests_monthly',
+      period: 'monthly',
+      limit: 100,
+      consumed: 0,
+      reserved: 0,
+      periodStart: now,
+      periodEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      updatedAt: now,
+    });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 2 }, (_, index) =>
+        AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+          ctx.evaluation.recordUsage({
+            quotaKey: 'ai_requests_monthly',
+            amount: 60,
+            operationId: `record-${index}`,
+          }),
+        ),
+      ),
+    );
+
+    const successful = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+    assert.equal(successful.length, 1);
+    assert.equal(rejected.length, 1);
+    for (const result of rejected) {
+      assertRejectedWith(result, QuotaExceededError);
+    }
+    const quota = await ctx.quotas.findByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const meters = await ctx.meters.listByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const consumedMeterTotal = meters
+      .filter((meter) => meter.kind === 'consumed')
+      .reduce((total, meter) => total + meter.amount, 0);
+    assert.equal(quota?.consumed, 60);
+    assert.equal(quota?.reserved, 0);
+    assert.ok((quota?.reserved ?? 0) + (quota?.consumed ?? 0) <= 100);
+    assert.equal(consumedMeterTotal, quota?.consumed);
+  });
+
+  test('concurrent commit of the same reservation applies exactly once', async () => {
+    const db = requireDb();
+    const ctx = createServices(db);
+    await seedEntitledTenant(db);
+    const reservation = await AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+      ctx.evaluation.reserveUsage({ quotaKey: 'ai_requests_monthly', amount: 30 }),
+    );
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 2 }, () =>
+        AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+          ctx.evaluation.commitReservation({ reservationId: reservation.reservationId }),
+        ),
+      ),
+    );
+
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+    const rejected = results.filter((result) => result.status === 'rejected');
+    assert.equal(rejected.length, 1);
+    assertRejectedWith(rejected[0] as PromiseRejectedResult, InvalidReservationOperationError);
+    const quota = await ctx.quotas.findByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const meter = await ctx.meters.findById(reservation.reservationId);
+    assert.equal(quota?.consumed, 30);
+    assert.equal(quota?.reserved, 0);
+    assert.equal(meter?.kind, 'committed');
+  });
+
+  test('concurrent release of the same reservation applies exactly once', async () => {
+    const db = requireDb();
+    const ctx = createServices(db);
+    await seedEntitledTenant(db);
+    const reservation = await AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+      ctx.evaluation.reserveUsage({ quotaKey: 'ai_requests_monthly', amount: 30 }),
+    );
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 2 }, () =>
+        AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+          ctx.evaluation.releaseReservation({ reservationId: reservation.reservationId }),
+        ),
+      ),
+    );
+
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+    const rejected = results.filter((result) => result.status === 'rejected');
+    assert.equal(rejected.length, 1);
+    assertRejectedWith(rejected[0] as PromiseRejectedResult, InvalidReservationOperationError);
+    const quota = await ctx.quotas.findByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const meter = await ctx.meters.findById(reservation.reservationId);
+    assert.equal(quota?.consumed, 0);
+    assert.equal(quota?.reserved, 0);
+    assert.equal(meter?.kind, 'released');
+  });
+
+  test('commit versus release race leaves one terminal transition and consistent counters', async () => {
+    const db = requireDb();
+    const ctx = createServices(db);
+    await seedEntitledTenant(db);
+    const reservation = await AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+      ctx.evaluation.reserveUsage({ quotaKey: 'ai_requests_monthly', amount: 30 }),
+    );
+
+    const results = await Promise.allSettled([
+      AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+        ctx.evaluation.commitReservation({ reservationId: reservation.reservationId }),
+      ),
+      AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+        ctx.evaluation.releaseReservation({ reservationId: reservation.reservationId }),
+      ),
+    ]);
+
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+    const rejected = results.filter((result) => result.status === 'rejected');
+    assert.equal(rejected.length, 1);
+    assertRejectedWith(rejected[0] as PromiseRejectedResult, InvalidReservationOperationError);
+    const quota = await ctx.quotas.findByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const meter = await ctx.meters.findById(reservation.reservationId);
+    assert.equal(quota?.reserved, 0);
+    assert.ok(quota?.consumed === 0 || quota?.consumed === 30);
+    assert.ok(meter?.kind === 'committed' || meter?.kind === 'released');
+    assert.equal(meter?.kind === 'committed' ? 30 : 0, quota?.consumed);
+  });
+
+  test('quota counters roll back when meter insert or update fails', async () => {
+    const db = requireDb();
+    const ctx = createServices(db);
+    await seedEntitledTenant(db);
+    const transactionRunner = new PostgresEntitlementsTransactionRunner(db);
+
+    class FailingRecordUsageMeterRepository extends PostgresUsageMeterRepository {
+      override async record(_meter: UsageMeter): Promise<void> {
+        throw new Error('meter insert failed');
+      }
+    }
+
+    const failingRecordService = new EntitlementEvaluationService(
+      ctx.plans,
+      ctx.features,
+      ctx.tenantState,
+      ctx.quotas,
+      new FailingRecordUsageMeterRepository(db),
+      transactionRunner,
+      new NoopEntitlementEventPublisher(),
+      ctx.context,
+    );
+    await assert.rejects(
+      () =>
+        AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+          failingRecordService.recordUsage({ quotaKey: 'ai_requests_monthly', amount: 20 }),
+        ),
+      /meter insert failed/,
+    );
+    let quota = await ctx.quotas.findByTenantAndKey(tenantA, 'ai_requests_monthly');
+    assert.equal(quota, null);
+
+    const reservation = await AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+      ctx.evaluation.reserveUsage({ quotaKey: 'ai_requests_monthly', amount: 20 }),
+    );
+
+    class FailingUpdateUsageMeterRepository extends PostgresUsageMeterRepository {
+      override async update(_meter: UsageMeter): Promise<void> {
+        throw new Error('meter update failed');
+      }
+    }
+
+    const failingUpdateService = new EntitlementEvaluationService(
+      ctx.plans,
+      ctx.features,
+      ctx.tenantState,
+      ctx.quotas,
+      new FailingUpdateUsageMeterRepository(db),
+      transactionRunner,
+      new NoopEntitlementEventPublisher(),
+      ctx.context,
+    );
+    await assert.rejects(
+      () =>
+        AlsEntitlementsContextResolver.runWithTenant(tenantA, () =>
+          failingUpdateService.commitReservation({ reservationId: reservation.reservationId }),
+        ),
+      /meter update failed/,
+    );
+    quota = await ctx.quotas.findByTenantAndKey(tenantA, 'ai_requests_monthly');
+    const meter = await ctx.meters.findById(reservation.reservationId);
+    assert.equal(quota?.consumed, 0);
+    assert.equal(quota?.reserved, 20);
     assert.equal(meter?.kind, 'reserved');
   });
 

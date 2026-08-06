@@ -56,6 +56,14 @@ export class PostgresUsageMeterRepository implements UsageMeterRepository {
     return mapMeter(result.rows[0]);
   }
 
+  async findByIdForUpdate(id: string): Promise<UsageMeter | null> {
+    const result = await this.database.query<UsageMeterRow>(
+      `SELECT ${USAGE_METER_COLUMNS} FROM usage_meters WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    return mapMeter(result.rows[0]);
+  }
+
   async update(meter: UsageMeter): Promise<void> {
     await this.database.query(
       `UPDATE usage_meters SET kind = $3, operation_id = $4 WHERE id = $1 AND tenant_id = $2`,
