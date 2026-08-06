@@ -395,7 +395,7 @@ test('the audit repository contract is append-only', () => {
   const methodNames = Object.getOwnPropertyNames(Object.getPrototypeOf(repo)).filter(
     (name) => name !== 'constructor',
   );
-  assert.deepEqual(methodNames, ['append', 'query']);
+  assert.deepEqual(methodNames, ['append', 'query', 'queryPlatform', 'findTenantEvent', 'findPlatformEvent']);
 });
 
 test('recording performs exactly one append and no other side effects', async () => {
@@ -647,4 +647,175 @@ test('a recorded event keeps its identity after append', async () => {
   const event = await service.recordTenantAction(tenantCommand());
   assert.equal(event.id, repo.appended[0]?.id);
   assert.equal(event.requestId, 'req-1');
+});
+
+test('queryPlatformAuditHistory returns platform events without any ambient tenant context', async () => {
+  const { service, repo } = createHarness({ tenantId: null });
+  await service.recordPlatformAction({
+    action: 'plan.retired',
+    actor: { id: 'scheduler', type: 'system' },
+    target: createAuditTarget({ type: 'plan' }),
+    reason: 'replaced by plan v2',
+  });
+  const results = await service.queryPlatformAuditHistory({});
+  assert.equal(results.length, 1);
+  assert.equal(results[0]?.scope, 'platform');
+  assert.equal(results[0]?.tenantId, null);
+  assert.equal(repo.lastPlatformQueryCriteria?.limit, 100);
+});
+
+test('queryPlatformAuditHistory validates filters, cursor pairs, and limits', async () => {
+  const { service, repo } = createHarness({ tenantId: null });
+  await assert.rejects(
+    () =>
+      service.queryPlatformAuditHistory({
+        from: new Date('2026-08-05T00:00:00.000Z'),
+        to: new Date('2026-08-04T00:00:00.000Z'),
+      }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryPlatformAuditHistory({ limit: 0 }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryPlatformAuditHistory({ limit: 1001 }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryPlatformAuditHistory({ action: '' }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryPlatformAuditHistory({ requestId: '  ' }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryPlatformAuditHistory({ beforeOccurredAt: new Date() }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryPlatformAuditHistory({ beforeId: 'evt-1' }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  assert.equal(repo.lastPlatformQueryCriteria, null);
+  await service.queryPlatformAuditHistory({ requestId: 'req-1', limit: 5 });
+  assert.equal(repo.lastPlatformQueryCriteria?.requestId, 'req-1');
+  assert.equal(repo.lastPlatformQueryCriteria?.limit, 5);
+});
+
+test('queryAuditHistory validates the new filters and the cursor pair', async () => {
+  const { service, repo } = createHarness();
+  await assert.rejects(
+    () => service.queryAuditHistory({ actorUserId: '' }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryAuditHistory({ actorPlatformRole: ' ' }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryAuditHistory({ requestId: '' }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryAuditHistory({ beforeOccurredAt: new Date() }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.queryAuditHistory({ beforeId: 'evt-1' }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () =>
+      service.queryAuditHistory({
+        beforeOccurredAt: new Date('not-a-date') as unknown as Date,
+        beforeId: 'evt-1',
+      }),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  assert.equal(repo.lastQueryCriteria, null);
+  await service.queryAuditHistory({
+    beforeOccurredAt: new Date('2026-08-04T12:00:00.000Z'),
+    beforeId: 'evt-1',
+  });
+  assert.equal(repo.lastQueryCriteria?.beforeOccurredAt?.toISOString(), '2026-08-04T12:00:00.000Z');
+  assert.equal(repo.lastQueryCriteria?.beforeId, 'evt-1');
+});
+
+test('queryAuditHistory filters by actor user id, platform role, and request id', async () => {
+  const { service, repo } = createHarness({ tenantId: 'tenant-1' });
+  const userActor = createAuditActor();
+  await service.recordTenantAction(
+    tenantCommand({ action: 'user.login', actor: userActor, requestId: 'req-1' }),
+  );
+  await service.recordTenantAction(
+    tenantCommand({
+      action: 'attendance.rollup',
+      actor: { id: 'rollup-worker', type: 'system' },
+      requestId: 'req-2',
+    }),
+  );
+  const byUser = await service.queryAuditHistory({ actorUserId: userActor.id });
+  assert.equal(byUser.length, 1);
+  assert.equal(byUser[0]?.action, 'user.login');
+  const byRole = await service.queryAuditHistory({ actorPlatformRole: 'rollup-worker' });
+  assert.equal(byRole.length, 1);
+  assert.equal(byRole[0]?.action, 'attendance.rollup');
+  const byRequest = await service.queryAuditHistory({ requestId: 'req-2' });
+  assert.equal(byRequest.length, 1);
+  assert.equal(byRequest[0]?.action, 'attendance.rollup');
+  assert.equal(repo.lastQueryCriteria?.requestId, 'req-2');
+});
+
+test('findTenantAuditEventById returns the event of the ambient tenant', async () => {
+  const { service, repo } = createHarness({ tenantId: 'tenant-1' });
+  const event = await service.recordTenantAction(tenantCommand());
+  const found = await service.findTenantAuditEventById(event.id);
+  assert.equal(found?.id, event.id);
+  assert.equal(repo.lastFindTenantEventId, event.id);
+  assert.equal(repo.lastFindTenantEventTenantId, 'tenant-1');
+});
+
+test('findTenantAuditEventById fails closed without an ambient tenant context', async () => {
+  const { service } = createHarness({ tenantId: null });
+  await assert.rejects(
+    () => service.findTenantAuditEventById('evt-1'),
+    (error: unknown) => error instanceof MissingTenantContextError,
+  );
+});
+
+test('findTenantAuditEventById rejects an empty event id and returns null for unknown ids', async () => {
+  const { service } = createHarness({ tenantId: 'tenant-1' });
+  await assert.rejects(
+    () => service.findTenantAuditEventById(''),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  await assert.rejects(
+    () => service.findTenantAuditEventById('  '),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
+  assert.equal(await service.findTenantAuditEventById('unknown-id'), null);
+});
+
+test('findPlatformAuditEventById returns the platform event and forwards the id', async () => {
+  const { service, repo } = createHarness({ tenantId: 'tenant-1' });
+  const event = await service.recordPlatformAction({
+    action: 'plan.retired',
+    actor: { id: 'scheduler', type: 'system' },
+    target: createAuditTarget({ type: 'plan' }),
+    reason: 'replaced by plan v2',
+  });
+  const found = await service.findPlatformAuditEventById(event.id);
+  assert.equal(found?.id, event.id);
+  assert.equal(repo.lastFindPlatformEventId, event.id);
+  assert.equal(await service.findPlatformAuditEventById('unknown-id'), null);
+});
+
+test('findPlatformAuditEventById rejects an empty event id', async () => {
+  const { service } = createHarness();
+  await assert.rejects(
+    () => service.findPlatformAuditEventById(''),
+    (error: unknown) => error instanceof InvalidAuditQueryError,
+  );
 });

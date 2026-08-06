@@ -69,3 +69,25 @@ test('toHttpApiError converts unknown errors to a generic 500', () => {
   assert.equal(converted.code, 'http.internal_error');
   assert.equal(converted.message, 'Internal server error');
 });
+
+test('audit not_found codes map to 404', () => {
+  const mapped = mapDomainError({ code: 'audit.event_not_found', message: 'gone' });
+  assert.equal(mapped.statusCode, HttpStatus.NOT_FOUND);
+  assert.equal(mapped.code, 'audit.event_not_found');
+  assert.equal(mapped.message, 'gone');
+});
+
+test('audit context failures map to 403', () => {
+  for (const code of ['audit.context_missing', 'audit.context_mismatch', 'audit.cross_tenant_read_denied']) {
+    assert.equal(mapDomainError({ code, message: 'x' }).statusCode, HttpStatus.FORBIDDEN, code);
+  }
+});
+
+test('audit invalid event and query codes map to 400', () => {
+  assert.equal(mapDomainError({ code: 'audit.invalid_event', message: 'x' }).statusCode, HttpStatus.BAD_REQUEST);
+  assert.equal(mapDomainError({ code: 'audit.invalid_query', message: 'x' }).statusCode, HttpStatus.BAD_REQUEST);
+});
+
+test('unknown audit codes map to 409', () => {
+  assert.equal(mapDomainError({ code: 'audit.unknown_state', message: 'x' }).statusCode, HttpStatus.CONFLICT);
+});

@@ -4,6 +4,7 @@ import type { PostgresDatabase } from '@manara/database';
 import { OutboxModule } from '@manara/outbox';
 import { AuthModule } from './auth/auth.module.js';
 import { AuditModule } from './audit/audit.module.js';
+import { AuditHttpModule } from './audit-http/audit.module.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { AuthorizationHttpModule } from './authorizations/authorization.module.js';
 import { DATABASE } from './database/database.constants.js';
@@ -41,6 +42,7 @@ export class AppModule {
               EntitlementsModule.forRoot(options.database),
               EntitlementsHttpModule.forRoot({ database: options.database, config: options.config }),
               AuditModule.forRoot(options.database),
+              AuditHttpModule.forRoot({ database: options.database, config: options.config }),
               OutboxModule.forRoot(options.database),
             ],
       providers: [{ provide: DATABASE, useValue: options.database }],

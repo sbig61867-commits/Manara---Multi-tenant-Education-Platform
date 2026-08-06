@@ -438,4 +438,146 @@ describe('audit persistence (integration)', { skip }, () => {
     assert.ok(Object.isFrozen(read.target));
     assert.ok(Object.isFrozen(read.metadata));
   });
+
+  test('platform queries return only platform events with a null tenant', async () => {
+    const db = requireDb();
+    const { repository, service } = createServices(db);
+    await recordTenantAction(db, tenantA, { action: 'user.login' });
+    await service.recordPlatformAction({
+      action: 'plan.retired',
+      actor: { id: 'scheduler', type: 'system' },
+      target: { type: 'plan', id: randomUUID() },
+      reason: 'retirement window reached',
+      requestId: 'req-p1',
+    });
+    const platform = await repository.queryPlatform({ limit: 10 });
+    assert.equal(platform.length, 1);
+    assert.equal(platform[0]?.scope, 'platform');
+    assert.equal(platform[0]?.tenantId, null);
+    assert.equal(platform[0]?.action, 'plan.retired');
+    const tenant = await repository.query({ tenantId: tenantA, limit: 10 });
+    assert.equal(tenant.length, 1);
+    assert.equal(tenant[0]?.scope, 'tenant');
+  });
+
+  test('platform queries filter by actor platform role and request id', async () => {
+    const db = requireDb();
+    const { repository, service } = createServices(db);
+    await service.recordPlatformAction({
+      action: 'plan.retired',
+      actor: { id: 'scheduler', type: 'system' },
+      target: { type: 'plan', id: randomUUID() },
+      reason: 'retirement window reached',
+      requestId: 'req-p1',
+    });
+    await service.recordPlatformAction({
+      action: 'tenant.frozen',
+      actor: { id: 'fraud-scanner', type: 'system' },
+      target: { type: 'tenant', id: randomUUID() },
+      reason: 'anomaly detected',
+      requestId: 'req-p2',
+    });
+    const byRole = await repository.queryPlatform({ actorPlatformRole: 'scheduler' });
+    assert.equal(byRole.length, 1);
+    assert.equal(byRole[0]?.action, 'plan.retired');
+    const byRequest = await repository.queryPlatform({ requestId: 'req-p2' });
+    assert.equal(byRequest.length, 1);
+    assert.equal(byRequest[0]?.action, 'tenant.frozen');
+    const noMatch = await repository.queryPlatform({ requestId: 'nope' });
+    assert.deepEqual(noMatch, []);
+  });
+
+  test('tenant queries filter by actor user id and request id', async () => {
+    const db = requireDb();
+    const { service } = createServices(db);
+    await recordTenantAction(db, tenantA, { action: 'user.login', requestId: 'req-a1' });
+    await recordTenantAction(db, tenantA, {
+      action: 'role.created',
+      actor: { id: userB, type: 'user' },
+      requestId: 'req-a2',
+    });
+    const byUser = await queryAsTenant(db, tenantA, () => service.queryAuditHistory({ actorUserId: userB }));
+    assert.equal(byUser.length, 1);
+    assert.equal(byUser[0]?.action, 'role.created');
+    const byRequest = await queryAsTenant(db, tenantA, () => service.queryAuditHistory({ requestId: 'req-a2' }));
+    assert.equal(byRequest.length, 1);
+    assert.equal(byRequest[0]?.action, 'role.created');
+  });
+
+  test('findTenantEvent scopes the lookup to the given tenant', async () => {
+    const db = requireDb();
+    const { repository } = createServices(db);
+    const eventA = await recordTenantAction(db, tenantA, { action: 'user.login' });
+    await recordTenantAction(db, tenantB, { action: 'user.login' });
+    const found = await repository.findTenantEvent(eventA.id, tenantA);
+    assert.ok(found);
+    assert.equal(found.id, eventA.id);
+    assert.equal(found.scope, 'tenant');
+    const crossTenant = await repository.findTenantEvent(eventA.id, tenantB);
+    assert.equal(crossTenant, null);
+    const unknown = await repository.findTenantEvent('00000000-0000-4000-8000-000000000000', tenantA);
+    assert.equal(unknown, null);
+  });
+
+  test('findPlatformEvent returns only platform events', async () => {
+    const db = requireDb();
+    const { repository, service } = createServices(db);
+    const platform = await service.recordPlatformAction({
+      action: 'plan.retired',
+      actor: { id: 'scheduler', type: 'system' },
+      target: { type: 'plan', id: randomUUID() },
+      reason: 'retirement window reached',
+      requestId: 'req-p1',
+    });
+    const tenantEvent = await recordTenantAction(db, tenantA, { action: 'user.login' });
+    const found = await repository.findPlatformEvent(platform.id);
+    assert.ok(found);
+    assert.equal(found.id, platform.id);
+    assert.equal(found.scope, 'platform');
+    assert.equal(await repository.findPlatformEvent(tenantEvent.id), null);
+    assert.equal(await repository.findPlatformEvent('00000000-0000-4000-8000-000000000000'), null);
+  });
+
+  test('cursor pagination orders by occurred_at desc and id desc', async () => {
+    const db = requireDb();
+    const { repository } = createServices(db);
+    const first = await recordTenantAction(db, tenantA, {
+      action: 'one',
+      occurredAt: new Date('2026-08-04T12:00:00.000Z'),
+    });
+    const second = await recordTenantAction(db, tenantA, {
+      action: 'two',
+      occurredAt: new Date('2026-08-04T13:00:00.000Z'),
+    });
+    const third = await recordTenantAction(db, tenantA, {
+      action: 'three',
+      occurredAt: new Date('2026-08-04T14:00:00.000Z'),
+    });
+    const full = await repository.query({ tenantId: tenantA, limit: 10 });
+    assert.deepEqual(
+      full.map((event) => event.action),
+      ['three', 'two', 'one'],
+    );
+    const page = await repository.query({
+      tenantId: tenantA,
+      limit: 2,
+      beforeOccurredAt: third.occurredAt,
+      beforeId: third.id,
+    });
+    assert.deepEqual(
+      page.map((event) => event.action),
+      ['two', 'one'],
+    );
+    const beforeSecond = await repository.query({
+      tenantId: tenantA,
+      limit: 1,
+      beforeOccurredAt: second.occurredAt,
+      beforeId: second.id,
+    });
+    assert.deepEqual(
+      beforeSecond.map((event) => event.action),
+      ['one'],
+    );
+    assert.equal(beforeSecond[0]?.id, first.id);
+  });
 });

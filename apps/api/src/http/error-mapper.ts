@@ -35,6 +35,7 @@ export interface MappedHttpError {
  * | code starts with `quota.`, `rate.` | 429 |
  * | code starts with `unavailable.`, `provider.` (fail-closed) | 503 |
  * | code starts with `entitlements.` | see `statusForEntitlementsCode` |
+ * | code starts with `audit.` | see `statusForAuditCode` |
  * | anything else | 500 |
  */
 export function mapDomainError(error: DomainErrorLike): MappedHttpError {
@@ -53,6 +54,9 @@ export function mapDomainError(error: DomainErrorLike): MappedHttpError {
 function statusForCode(code: string): number {
   if (code.startsWith('entitlements.')) {
     return statusForEntitlementsCode(code);
+  }
+  if (code.startsWith('audit.')) {
+    return statusForAuditCode(code);
   }
   if (code.endsWith('.not_found') || code.endsWith('_not_found')) {
     return HttpStatus.NOT_FOUND;
@@ -111,6 +115,29 @@ function statusForEntitlementsCode(code: string): number {
     return HttpStatus.FORBIDDEN;
   }
   if (code === 'entitlements.negative_usage' || code === 'entitlements.invalid_feature_entitlement') {
+    return HttpStatus.BAD_REQUEST;
+  }
+  return HttpStatus.CONFLICT;
+}
+
+/**
+ * Maps `audit.*` domain errors. Missing/mismatched tenant context and
+ * cross-tenant read denials fail closed (403); invalid queries and events are
+ * client errors (400); anything else that is not a 404 is a state conflict
+ * (409).
+ */
+function statusForAuditCode(code: string): number {
+  if (code.endsWith('.not_found') || code.endsWith('_not_found')) {
+    return HttpStatus.NOT_FOUND;
+  }
+  if (
+    code === 'audit.context_missing' ||
+    code === 'audit.context_mismatch' ||
+    code === 'audit.cross_tenant_read_denied'
+  ) {
+    return HttpStatus.FORBIDDEN;
+  }
+  if (code === 'audit.invalid_event' || code === 'audit.invalid_query') {
     return HttpStatus.BAD_REQUEST;
   }
   return HttpStatus.CONFLICT;
