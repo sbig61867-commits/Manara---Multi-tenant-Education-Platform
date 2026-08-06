@@ -7,7 +7,7 @@ import { generateRequestId, REQUEST_ID_HEADER } from './request-id.js';
 import { buildErrorResponse } from './error-response.js';
 import { applyDefaultSecurityHeaders } from './security-headers.js';
 import { HTTP_VALIDATION_FAILED } from './error-codes.js';
-import { HttpApiError, HttpValidationError, fromHttpException } from './errors.js';
+import { HttpApiError, HttpRateLimitedError, HttpValidationError, fromHttpException } from './errors.js';
 import { isDomainError, mapDomainError } from './error-mapper.js';
 import { getRequestContext } from './request-context.js';
 
@@ -47,6 +47,29 @@ export class HttpExceptionFilter implements ExceptionFilter {
       code = exception.code;
       message = exception.message;
       details = exception.details;
+    } else if (exception instanceof HttpRateLimitedError) {
+      statusCode = exception.statusCode;
+      code = exception.code;
+      message = exception.message;
+      details = null;
+      if (typeof (response as FastifyReply).status === 'function') {
+        (response as FastifyReply).header('Retry-After', String(exception.retryAfterSeconds));
+      } else {
+        (response as ServerResponse).setHeader('Retry-After', String(exception.retryAfterSeconds));
+      }
+      request.log.warn(
+        {
+          event: 'auth_rate_limit_blocked',
+          requestId,
+          policy: exception.policy,
+          identifierHash: exception.identifierHash ?? undefined,
+          retryAfterSeconds: exception.retryAfterSeconds,
+          method: request.method,
+          path: request.url,
+          clientIp: request.ip ?? null,
+        },
+        'Authentication rate limit exceeded',
+      );
     } else if (exception instanceof HttpApiError) {
       statusCode = exception.statusCode;
       code = exception.code;

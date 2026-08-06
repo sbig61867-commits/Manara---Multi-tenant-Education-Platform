@@ -3,6 +3,7 @@ import {
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -27,6 +28,7 @@ import { CredentialVerificationService } from '../identity/application/credentia
 import { SessionService } from '../identity/application/session.service.js';
 import { InvalidCredentialsError } from '../identity/domain/errors.js';
 import type { AuthSession, User } from '../identity/domain/types.js';
+import { AuthRateLimitService } from './auth-rate-limit.service.js';
 import {
   LOGIN_RESPONSE_OPENAPI,
   SESSION_RESPONSE_OPENAPI,
@@ -38,6 +40,17 @@ import {
   type SessionResponse,
 } from './auth.dto.js';
 import { SESSION_COOKIE } from './auth.tokens.js';
+
+const RATE_LIMITED_RESPONSE = {
+  status: HttpStatus.TOO_MANY_REQUESTS,
+  description: 'Too many requests; retry after the Retry-After header',
+  headers: {
+    'Retry-After': {
+      description: 'Seconds to wait before retrying',
+      schema: { type: 'integer' },
+    },
+  },
+};
 
 function toSessionView(session: AuthSession): AuthSessionView {
   return authSessionSchema.parse({
@@ -71,6 +84,7 @@ export class AuthController {
     @Inject(CredentialVerificationService) private readonly credentials: CredentialVerificationService,
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(RequestContextService) private readonly requestContext: RequestContextService,
+    @Inject(AuthRateLimitService) private readonly rateLimits: AuthRateLimitService,
   ) {}
 
   private setSessionCookie(reply: FastifyReply, token: string): void {
@@ -93,16 +107,20 @@ export class AuthController {
   @ApiOkResponse({ description: 'Authenticated; session cookie set', schema: LOGIN_RESPONSE_OPENAPI })
   @ApiBadRequestResponse({ description: 'Validation failed' })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
-  async login(@Body() body: LoginBody, @Res({ passthrough: true }) reply: FastifyReply): Promise<LoginResponse> {
+  @ApiResponse(RATE_LIMITED_RESPONSE)
+  async login(@Body() body: LoginBody, @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): Promise<LoginResponse> {
+    this.rateLimits.guardLogin(request.ip, body.email);
     let user: User;
     try {
       user = await this.credentials.authenticate(body.email, body.password);
     } catch (error) {
       if (error instanceof InvalidCredentialsError) {
+        this.rateLimits.recordLoginFailure(request.ip, body.email);
         throw new UnauthorizedException('Invalid credentials');
       }
       throw error;
     }
+    this.rateLimits.resetLoginFailures(request.ip, body.email);
     const created = await this.sessions.createSession(user.id);
     this.setSessionCookie(reply, created.token);
     this.requestContext.update({ authenticatedUserId: user.id });
@@ -113,7 +131,9 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke the current session and clear the session cookie' })
   @ApiNoContentResponse({ description: 'Session revoked' })
+  @ApiResponse(RATE_LIMITED_RESPONSE)
   async logout(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): Promise<void> {
+    this.rateLimits.guardEndpoint(request.ip);
     const token = this.sessionToken(request);
     if (token !== null) {
       await this.sessions.revokeSession(token);
@@ -126,10 +146,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Rotate the session and issue a new session cookie' })
   @ApiOkResponse({ description: 'Session rotated; new cookie set', schema: SESSION_RESPONSE_OPENAPI })
   @ApiUnauthorizedResponse({ description: 'Session is missing, invalid, or expired' })
+  @ApiResponse(RATE_LIMITED_RESPONSE)
   async refresh(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): Promise<SessionResponse> {
+    this.rateLimits.guardRefresh(request.ip);
     const token = this.sessionToken(request);
     const rotated = token === null ? null : await this.sessions.rotateSession(token);
     if (rotated === null) {
+      this.rateLimits.recordRefreshFailure(request.ip);
       throw new UnauthorizedException('Session is invalid or expired');
     }
     this.setSessionCookie(reply, rotated.token);
@@ -141,7 +164,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Return the current session' })
   @ApiOkResponse({ description: 'Current session', schema: SESSION_RESPONSE_OPENAPI })
   @ApiUnauthorizedResponse({ description: 'No active session' })
+  @ApiResponse(RATE_LIMITED_RESPONSE)
   async session(@Req() request: FastifyRequest): Promise<SessionResponse> {
+    this.rateLimits.guardEndpoint(request.ip);
     const token = this.sessionToken(request);
     const session = token === null ? null : await this.sessions.validateSession(token);
     if (session === null) {

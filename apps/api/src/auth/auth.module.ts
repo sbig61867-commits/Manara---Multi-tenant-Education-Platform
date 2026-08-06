@@ -5,17 +5,35 @@ import { buildSessionCookieOptions, resolveCookieSecure } from '../http/cookie-o
 import { SESSION_ABSOLUTE_TTL_MS } from '../identity/application/session.service.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { AuthController } from './auth.controller.js';
-import { SESSION_COOKIE } from './auth.tokens.js';
+import { AuthRateLimitService } from './auth-rate-limit.service.js';
+import {
+  AUTH_ENDPOINT_IP_LIMITER,
+  AUTH_LOGIN_EMAIL_IP_LIMITER,
+  AUTH_LOGIN_IP_LIMITER,
+  AUTH_REFRESH_IP_LIMITER,
+  SESSION_COOKIE,
+} from './auth.tokens.js';
+import { InMemoryAuthRateLimiter } from './in-memory-auth-rate-limiter.js';
 
 export interface AuthModuleOptions {
   database: PostgresDatabase | null;
   config: ApiEnv;
 }
 
+function buildLimiter(config: ApiEnv, limit: number, windowMs: number): InMemoryAuthRateLimiter {
+  return new InMemoryAuthRateLimiter({ limit, windowMs });
+}
+
 /**
  * HTTP layer for authentication. Owns the session cookie configuration
  * (derived from the API environment) and wires the identity application
  * services; all business logic stays in `IdentityModule`.
+ *
+ * Abuse protection uses in-memory per-instance limiters (no external
+ * service). Counters are NOT shared across API instances: with more than one
+ * instance, each has independent windows and the protection is per-instance,
+ * not cluster-wide. A shared-store adapter behind `AuthRateLimiterPort`
+ * (e.g. Redis) is required for cluster-wide protection.
  */
 @Module({})
 export class AuthModule {
@@ -32,7 +50,26 @@ export class AuthModule {
       module: AuthModule,
       imports: [IdentityModule.forRoot(options.database)],
       controllers: [AuthController],
-      providers: [{ provide: SESSION_COOKIE, useValue: sessionCookie }],
+      providers: [
+        { provide: SESSION_COOKIE, useValue: sessionCookie },
+        {
+          provide: AUTH_LOGIN_IP_LIMITER,
+          useValue: buildLimiter(options.config, options.config.AUTH_LOGIN_IP_MAX_FAILURES, options.config.AUTH_LOGIN_IP_WINDOW_MS),
+        },
+        {
+          provide: AUTH_LOGIN_EMAIL_IP_LIMITER,
+          useValue: buildLimiter(options.config, options.config.AUTH_LOGIN_EMAIL_IP_MAX_FAILURES, options.config.AUTH_LOGIN_EMAIL_IP_WINDOW_MS),
+        },
+        {
+          provide: AUTH_REFRESH_IP_LIMITER,
+          useValue: buildLimiter(options.config, options.config.AUTH_REFRESH_IP_MAX_REQUESTS, options.config.AUTH_REFRESH_IP_WINDOW_MS),
+        },
+        {
+          provide: AUTH_ENDPOINT_IP_LIMITER,
+          useValue: buildLimiter(options.config, options.config.AUTH_ENDPOINT_IP_MAX_REQUESTS, options.config.AUTH_ENDPOINT_IP_WINDOW_MS),
+        },
+        AuthRateLimitService,
+      ],
     };
   }
 }
