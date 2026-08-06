@@ -22,3 +22,11 @@ export class InvalidOutboxClaimError extends OutboxError {
 export class OutboxMessageNotFoundError extends OutboxError {
   readonly code = 'outbox.message_not_found';
 }
+
+export class OutboxEventTypeUndeclaredError extends OutboxError {
+  readonly code = 'outbox.event_type_undeclared';
+}
+
+export class OutboxEventTypeUnsupportedError extends OutboxError {
+  readonly code = 'outbox.event_type_unsupported';
+}

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { apiEnvSchema, loadConfig } from '@manara/config';
 import { MigrationRunner, type PostgresDatabase } from '@manara/database';
+import { OutboxService } from '@manara/outbox';
 import { createApiApplication } from '../../src/bootstrap.js';
 import { UserCreationService } from '../../src/identity/application/user-creation.service.js';
 import { AlsTenantContextResolver } from '../../src/tenant/adapters/als-tenant-context.resolver.js';
@@ -33,7 +35,7 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
     const runner = new MigrationRunner(database, { migrationsDir: MIGRATIONS_DIR });
     await runner.runMigrations();
     await database.query(
-      'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations CASCADE',
+      'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, outbox_messages CASCADE',
     );
 
     const previous = new Map<string, string | undefined>();
@@ -361,6 +363,25 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
       } while (cursor !== null);
       assert.equal(new Set(collectedInvitationIds).size, collectedInvitationIds.length);
       assert.ok(collectedInvitationIds.length >= 3);
+
+      // --- outbox isolation: business flows never enqueue dead-letter-bound messages ---
+      const outbox = app.get(OutboxService);
+      await assert.rejects(
+        () =>
+          outbox.enqueue({
+            scope: 'platform',
+            tenantId: null,
+            eventSource: 'smoke',
+            eventType: 'membership.created',
+            occurrenceId: randomUUID(),
+            payload: { proof: 'strict-policy' },
+          }),
+        /would guarantee a dead letter/,
+      );
+      const outboxCount = await database.query<{ total: number }>(
+        'SELECT count(*)::int AS total FROM outbox_messages',
+      );
+      assert.equal(outboxCount.rows[0]?.total, 0);
     } finally {
       await app.close();
       for (const [key, value] of previous) {

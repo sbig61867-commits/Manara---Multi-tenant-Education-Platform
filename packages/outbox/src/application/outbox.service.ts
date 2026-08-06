@@ -5,6 +5,8 @@ import {
   InvalidOutboxClaimError,
   InvalidOutboxMessageError,
   MissingTenantContextError,
+  OutboxEventTypeUndeclaredError,
+  OutboxEventTypeUnsupportedError,
   OutboxMessageNotFoundError,
 } from '../domain/errors.js';
 import type {
@@ -20,11 +22,13 @@ import type {
   OutboxMessage,
   OutboxRetryOutcome,
 } from '../domain/types.js';
-import { OUTBOX_CLOCK, OUTBOX_DEAD_LETTER_REPOSITORY, OUTBOX_EVENT_PUBLISHER, OUTBOX_REPOSITORY } from '../outbox.tokens.js';
+import { OUTBOX_CLOCK, OUTBOX_DEAD_LETTER_REPOSITORY, OUTBOX_EVENT_CATALOG_POLICY, OUTBOX_EVENT_PUBLISHER, OUTBOX_REPOSITORY } from '../outbox.tokens.js';
 import type { DeadLetterRepository } from '../ports/dead-letter.repository.js';
 import type { OutboxClock } from '../ports/outbox-clock.js';
 import type { OutboxRepository } from '../ports/outbox.repository.js';
 import { OUTBOX_DEFAULT_CLAIM_LEASE_MS, outboxRetryDelayMs } from './backoff.js';
+import { classifyOutboxEventType } from './event-catalog.js';
+import type { OutboxEventCatalogPolicy } from './event-catalog.js';
 import { deriveOutboxEventId } from './event-id.js';
 import { sanitizeErrorMessage, sanitizeOutboxPayload } from './payload-sanitizer.js';
 
@@ -50,6 +54,8 @@ export class OutboxService {
     @Inject(OUTBOX_DEAD_LETTER_REPOSITORY) private readonly deadLetterRepository: DeadLetterRepository,
     @Inject(OUTBOX_EVENT_PUBLISHER) private readonly eventPublisher: OutboxEventPublisher,
     @Inject(OUTBOX_CLOCK) private readonly clock: OutboxClock,
+    @Inject(OUTBOX_EVENT_CATALOG_POLICY)
+    private readonly eventCatalogPolicy: OutboxEventCatalogPolicy = 'open',
   ) {}
 
   /**
@@ -57,6 +63,11 @@ export class OutboxService {
    * originating business transaction: the insert joins the caller's ambient
    * transaction, so the message commits or rolls back with the business write.
    * Re-enqueuing the same deterministic event id is an idempotent no-op.
+   *
+   * Under the strict catalog policy, event types that are undeclared (a typo)
+   * or declared without a delivery destination are rejected before any insert,
+   * so business flows can never create messages that are guaranteed to
+   * dead-letter in the worker.
    */
   async enqueue(command: OutboxEnqueueCommand): Promise<OutboxEnqueueOutcome> {
     if (command.scope !== 'tenant' && command.scope !== 'platform') {
@@ -65,6 +76,19 @@ export class OutboxService {
     const tenantId = this.resolveTenantId(command.scope, command.tenantId);
     this.assertIdentifier(command.eventSource, 'event source', MAX_EVENT_SOURCE_LENGTH);
     this.assertIdentifier(command.eventType, 'event type', MAX_EVENT_TYPE_LENGTH);
+    if (this.eventCatalogPolicy === 'strict') {
+      const classification = classifyOutboxEventType(command.eventType);
+      if (classification === 'undeclared') {
+        throw new OutboxEventTypeUndeclaredError(
+          `Event type "${command.eventType}" is not declared in the outbox event catalog`,
+        );
+      }
+      if (classification === 'without-destination') {
+        throw new OutboxEventTypeUnsupportedError(
+          `Event type "${command.eventType}" has no delivery destination; enqueueing it would guarantee a dead letter`,
+        );
+      }
+    }
     this.assertIdentifier(command.occurrenceId, 'occurrence id', MAX_OCCURRENCE_ID_LENGTH);
     const payload = sanitizeOutboxPayload(command.payload);
     if (JSON.stringify(payload).length > MAX_PAYLOAD_JSON_LENGTH) {

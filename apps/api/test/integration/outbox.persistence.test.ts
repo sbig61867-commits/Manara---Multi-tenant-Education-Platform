@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, test } from 'node:test';
+import { Test } from '@nestjs/testing';
 import { MigrationRunner, type PostgresDatabase } from '@manara/database';
 import {
   NoopOutboxEventPublisher,
   OUTBOX_DEFAULT_CLAIM_LEASE_MS,
+  OutboxEventTypeUndeclaredError,
+  OutboxEventTypeUnsupportedError,
+  OutboxModule,
   OutboxService,
   PostgresDeadLetterRepository,
   PostgresOutboxRepository,
@@ -676,5 +680,43 @@ describe('outbox persistence (integration)', { skip }, () => {
     assert.equal(record?.payload.orderId, 'order-1');
     const again = await service.moveToDeadLetter(messageId ?? 'missing');
     assert.equal(again.status, 'already_dead_lettered');
+  });
+
+  test('OutboxModule.forRoot defaults to the strict catalog policy when a database is present', async () => {
+    const db = requireDb();
+    const moduleRef = await Test.createTestingModule({
+      imports: [OutboxModule.forRoot(db)],
+    }).compile();
+    try {
+      const service = moduleRef.get(OutboxService);
+      await assert.rejects(
+        () =>
+          service.enqueue({
+            scope: 'platform',
+            tenantId: null,
+            eventSource: 'module-test',
+            eventType: 'membership.created',
+            occurrenceId: randomUUID(),
+            payload: { proof: 'unsupported' },
+          }),
+        OutboxEventTypeUnsupportedError,
+      );
+      await assert.rejects(
+        () =>
+          service.enqueue({
+            scope: 'platform',
+            tenantId: null,
+            eventSource: 'module-test',
+            eventType: 'membership.createdd',
+            occurrenceId: randomUUID(),
+            payload: { proof: 'undeclared' },
+          }),
+        OutboxEventTypeUndeclaredError,
+      );
+      const after = await db.query<{ total: number }>('SELECT count(*)::int AS total FROM outbox_messages');
+      assert.equal(after.rows[0]?.total, 0);
+    } finally {
+      await moduleRef.close();
+    }
   });
 });
