@@ -11,7 +11,7 @@ import {
   PostgresOutboxRepository,
 } from '@manara/outbox';
 import type { OutboxClock } from '@manara/outbox';
-import { OutboxDispatcherRegistry } from './dispatcher-registry.js';
+import { buildOutboxDispatcherRegistry } from './outbox-event-catalog.js';
 import { createHealthServer } from './health-server.js';
 import { WorkerMetrics } from './metrics.js';
 import { OutboxDispatcherRuntime } from './outbox-dispatcher-runtime.js';
@@ -56,9 +56,19 @@ async function bootstrap(): Promise<void> {
   const deadLetters = new PostgresDeadLetterRepository(database);
   const service = new OutboxService(repository, deadLetters, new NoopOutboxEventPublisher(), clock);
 
-  const registry = new OutboxDispatcherRegistry();
   const metrics = new WorkerMetrics();
   const workerId = `${hostname()}:${process.pid}`;
+
+  let registry;
+  try {
+    registry = buildOutboxDispatcherRegistry({ logger: activeLogger, metrics, clock });
+  } catch (error) {
+    activeLogger.fatal(
+      { event: 'worker_dispatcher_configuration_error', error },
+      'Outbox dispatcher coverage is invalid; refusing to start',
+    );
+    process.exit(1);
+  }
 
   runtime = new OutboxDispatcherRuntime(
     {

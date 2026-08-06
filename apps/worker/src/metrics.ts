@@ -11,6 +11,7 @@ export interface WorkerMetricsSnapshot {
   readonly failed: number;
   readonly retried: number;
   readonly deadLettered: number;
+  readonly unsupported: number;
   readonly staleClaimsReleased: number;
   readonly dispatchLatency: DispatchLatencySnapshot;
 }
@@ -22,6 +23,7 @@ export class WorkerMetrics {
   private failed = 0;
   private retried = 0;
   private deadLettered = 0;
+  private unsupported = 0;
   private staleClaimsReleased = 0;
   private dispatchCount = 0;
   private dispatchSumMs = 0;
@@ -48,6 +50,10 @@ export class WorkerMetrics {
     this.deadLettered += 1;
   }
 
+  recordUnsupported(): void {
+    this.unsupported += 1;
+  }
+
   recordStaleClaimsReleased(count: number): void {
     this.staleClaimsReleased += count;
   }
@@ -66,6 +72,7 @@ export class WorkerMetrics {
       failed: this.failed,
       retried: this.retried,
       deadLettered: this.deadLettered,
+      unsupported: this.unsupported,
       staleClaimsReleased: this.staleClaimsReleased,
       dispatchLatency: {
         count: this.dispatchCount,

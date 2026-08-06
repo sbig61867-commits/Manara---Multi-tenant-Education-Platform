@@ -12,6 +12,8 @@ import type { OutboxClock } from '@manara/outbox';
 import { OutboxDispatcherRegistry } from '../../src/dispatcher-registry.js';
 import { createHealthServer } from '../../src/health-server.js';
 import { WorkerMetrics } from '../../src/metrics.js';
+import { buildOutboxDispatcherRegistry } from '../../src/outbox-event-catalog.js';
+import { OUTBOX_EVENT_TYPE_UNSUPPORTED_FAILURE_CODE } from '../../src/unsupported-event-dispatcher.js';
 import {
   OutboxDispatcherRuntime,
   type OutboxDispatcherRuntimeOptions,
@@ -82,12 +84,13 @@ describe('outbox dispatcher runtime (integration)', { skip }, () => {
     db: PostgresDatabase,
     registry: OutboxDispatcherRegistry,
     overrides?: Partial<OutboxDispatcherRuntimeOptions>,
+    shared?: { metrics?: WorkerMetrics; logger?: CollectingRuntimeLogger },
   ) {
     const repository = new PostgresOutboxRepository(db);
     const deadLetters = new PostgresDeadLetterRepository(db);
     const service = new OutboxService(repository, deadLetters, new NoopOutboxEventPublisher(), new SystemOutboxClock());
-    const metrics = new WorkerMetrics();
-    const logger = new CollectingRuntimeLogger();
+    const metrics = shared?.metrics ?? new WorkerMetrics();
+    const logger = shared?.logger ?? new CollectingRuntimeLogger();
     const runtime = new OutboxDispatcherRuntime(
       {
         pollIntervalMs: 60_000,
@@ -323,6 +326,53 @@ describe('outbox dispatcher runtime (integration)', { skip }, () => {
     ]);
     assert.equal(platformRow.rows[0]?.status, 'delivered');
     assert.equal(tenantRow.rows[0]?.status, 'pending');
+  });
+
+  test('an explicitly unsupported emitted event type retries and dead-letters with the unsupported code', async () => {
+    const db = requireDb();
+    const metrics = new WorkerMetrics();
+    const logger = new CollectingRuntimeLogger();
+    const { runtime, service } = createRuntime(
+      db,
+      buildOutboxDispatcherRegistry({ logger, metrics, clock: new SystemOutboxClock() }),
+      undefined,
+      { metrics, logger },
+    );
+    const message = await enqueuePlatform(db, service, 'membership.created', randomUUID());
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      if (attempt > 1) {
+        await makeDue(db, message.id);
+      }
+      const summary = await runtime.runCycle();
+      assert.equal(summary.claimed, 1);
+      assert.equal(summary.failed, 1);
+      const [row] = (
+        await db.query<{ status: string; attempt_count: number; last_error: Record<string, unknown> | null }>(
+          'SELECT status, attempt_count, last_error FROM outbox_messages WHERE id = $1',
+          [message.id],
+        )
+      ).rows;
+      assert.equal(row?.attempt_count, attempt);
+      assert.equal(row?.last_error?.code, OUTBOX_EVENT_TYPE_UNSUPPORTED_FAILURE_CODE);
+      assert.equal(row?.last_error?.retryable, true);
+      if (attempt < 5) {
+        assert.equal(row?.status, 'pending');
+      } else {
+        assert.equal(row?.status, 'dead_letter');
+      }
+    }
+
+    const deadLetterCount = await db.query('SELECT count(*)::int AS total FROM outbox_dead_letters WHERE message_id = $1', [message.id]);
+    assert.equal(deadLetterCount.rows[0]?.total, 1);
+    const snapshot = metrics.getSnapshot();
+    assert.equal(snapshot.unsupported, 5);
+    const unsupportedLogs = logger.entries.filter((entry) => entry.object.event === 'worker_message_unsupported');
+    assert.equal(unsupportedLogs.length, 5);
+    for (const entry of unsupportedLogs) {
+      assert.equal(Object.hasOwn(entry.object, 'payload'), false);
+      assert.equal(entry.object.type, 'membership.created');
+    }
   });
 
   test('liveness and readiness reflect the runtime and database state', async () => {
