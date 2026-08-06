@@ -220,7 +220,7 @@ export class EntitlementEvaluationService {
     const tenantId = requireTenantContext(this.contextResolver);
     await this.transactionRunner.runInTransaction(async () => {
       const meter = await this.requireReservedMeter(command.reservationId, tenantId);
-      const quota = await this.quotas.findByTenantAndKey(tenantId, meter.quotaKey);
+      const quota = await this.quotas.findByTenantAndKeyForUpdate(tenantId, meter.quotaKey);
       if (quota === null) {
         throw new ReservationNotFoundError('The reservation has no quota state');
       }
@@ -240,7 +240,7 @@ export class EntitlementEvaluationService {
     const tenantId = requireTenantContext(this.contextResolver);
     await this.transactionRunner.runInTransaction(async () => {
       const meter = await this.requireReservedMeter(command.reservationId, tenantId);
-      const quota = await this.quotas.findByTenantAndKey(tenantId, meter.quotaKey);
+      const quota = await this.quotas.findByTenantAndKeyForUpdate(tenantId, meter.quotaKey);
       if (quota === null) {
         throw new ReservationNotFoundError('The reservation has no quota state');
       }
@@ -261,7 +261,7 @@ export class EntitlementEvaluationService {
   }
 
   private async requireReservedMeter(reservationId: string, tenantId: string): Promise<UsageMeter> {
-    const meter = await this.meters.findById(reservationId);
+    const meter = await this.meters.findByIdForUpdate(reservationId);
     if (meter === null) {
       throw new ReservationNotFoundError('The reservation does not exist');
     }
@@ -276,7 +276,7 @@ export class EntitlementEvaluationService {
 
   private async getOrCreateQuotaInTransaction(tenantId: string, quotaKey: string): Promise<UsageQuota> {
     const limit = await this.resolveQuotaLimit(tenantId, quotaKey);
-    const existing = await this.quotas.findByTenantAndKey(tenantId, quotaKey);
+    const existing = await this.quotas.findByTenantAndKeyForUpdate(tenantId, quotaKey);
     const now = new Date();
     if (existing === null) {
       const created: UsageQuota = {
@@ -291,8 +291,12 @@ export class EntitlementEvaluationService {
         periodEnd: new Date(now.getTime() + MONTHLY_WINDOW_DAYS * 24 * 60 * 60 * 1000),
         updatedAt: now,
       };
-      await this.quotas.create(created);
-      return created;
+      await this.quotas.createIfNotExists(created);
+      const locked = await this.quotas.findByTenantAndKeyForUpdate(tenantId, quotaKey);
+      if (locked === null) {
+        throw new Error('Quota row was not available after creation');
+      }
+      return locked;
     }
     if (existing.periodEnd !== null && now.getTime() > existing.periodEnd.getTime()) {
       const rolled: UsageQuota = {

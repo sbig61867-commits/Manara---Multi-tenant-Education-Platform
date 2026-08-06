@@ -153,8 +153,21 @@ export class FakeUsageQuotaRepository implements UsageQuotaRepository {
     return this.quotas.get(`${tenantId}:${quotaKey}`) ?? null;
   }
 
+  async findByTenantAndKeyForUpdate(tenantId: string, quotaKey: string): Promise<UsageQuota | null> {
+    return this.findByTenantAndKey(tenantId, quotaKey);
+  }
+
   async create(quota: UsageQuota): Promise<void> {
     this.quotas.set(`${quota.tenantId}:${quota.quotaKey}`, quota);
+  }
+
+  async createIfNotExists(quota: UsageQuota): Promise<boolean> {
+    const key = `${quota.tenantId}:${quota.quotaKey}`;
+    if (this.quotas.has(key)) {
+      return false;
+    }
+    this.quotas.set(key, quota);
+    return true;
   }
 
   async update(quota: UsageQuota): Promise<void> {
@@ -175,6 +188,10 @@ export class FakeUsageMeterRepository implements UsageMeterRepository {
 
   async findById(id: string): Promise<UsageMeter | null> {
     return this.meters.get(id) ?? null;
+  }
+
+  async findByIdForUpdate(id: string): Promise<UsageMeter | null> {
+    return this.findById(id);
   }
 
   async update(meter: UsageMeter): Promise<void> {

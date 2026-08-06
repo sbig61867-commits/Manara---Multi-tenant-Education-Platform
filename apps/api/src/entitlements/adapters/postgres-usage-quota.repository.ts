@@ -51,6 +51,14 @@ export class PostgresUsageQuotaRepository implements UsageQuotaRepository {
     return mapQuota(result.rows[0]);
   }
 
+  async findByTenantAndKeyForUpdate(tenantId: string, quotaKey: string): Promise<UsageQuota | null> {
+    const result = await this.database.query<UsageQuotaRow>(
+      `SELECT ${USAGE_QUOTA_COLUMNS} FROM usage_quotas WHERE tenant_id = $1 AND quota_key = $2 FOR UPDATE`,
+      [tenantId, quotaKey],
+    );
+    return mapQuota(result.rows[0]);
+  }
+
   async create(quota: UsageQuota): Promise<void> {
     await this.database.query(
       `INSERT INTO usage_quotas (${USAGE_QUOTA_COLUMNS})
@@ -68,6 +76,27 @@ export class PostgresUsageQuotaRepository implements UsageQuotaRepository {
         quota.updatedAt,
       ],
     );
+  }
+
+  async createIfNotExists(quota: UsageQuota): Promise<boolean> {
+    const result = await this.database.query(
+      `INSERT INTO usage_quotas (${USAGE_QUOTA_COLUMNS})
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (tenant_id, quota_key) DO NOTHING`,
+      [
+        quota.id,
+        quota.tenantId,
+        quota.quotaKey,
+        quota.period,
+        quota.limit,
+        quota.consumed,
+        quota.reserved,
+        quota.periodStart,
+        quota.periodEnd,
+        quota.updatedAt,
+      ],
+    );
+    return result.rowCount === 1;
   }
 
   async update(quota: UsageQuota): Promise<void> {
