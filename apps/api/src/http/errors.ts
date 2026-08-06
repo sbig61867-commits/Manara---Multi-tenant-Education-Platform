@@ -2,7 +2,7 @@ import type { HttpException } from '@nestjs/common';
 import { HttpStatus } from '@nestjs/common';
 import type { ErrorDetail } from '@manara/contracts';
 import type { HttpErrorCode } from './error-codes.js';
-import { HTTP_INTERNAL_ERROR } from './error-codes.js';
+import { HTTP_INTERNAL_ERROR, HTTP_TOO_MANY_REQUESTS } from './error-codes.js';
 
 /**
  * Base class for all API-layer errors. Carries a stable machine-readable
@@ -55,6 +55,25 @@ export class HttpPayloadTooLargeError extends HttpApiError {
 export class HttpNotFoundError extends HttpApiError {
   constructor(message: string) {
     super({ code: 'http.not_found', statusCode: HttpStatus.NOT_FOUND, message });
+  }
+}
+
+/**
+ * Rate-limited authentication attempt. Uses the stable 429 envelope code and
+ * carries only the bounded, non-reversible identifier hash plus the policy
+ * label; never an email, password, token, or cookie value. The exception
+ * filter converts `retryAfterSeconds` into the `Retry-After` header.
+ */
+export class HttpRateLimitedError extends HttpApiError {
+  readonly retryAfterSeconds: number;
+  readonly policy: string;
+  readonly identifierHash: string | null;
+
+  constructor(options: { retryAfterSeconds: number; policy: string; identifierHash?: string | null }) {
+    super({ code: HTTP_TOO_MANY_REQUESTS, statusCode: HttpStatus.TOO_MANY_REQUESTS, message: 'Too many requests' });
+    this.retryAfterSeconds = options.retryAfterSeconds;
+    this.policy = options.policy;
+    this.identifierHash = options.identifierHash ?? null;
   }
 }
 

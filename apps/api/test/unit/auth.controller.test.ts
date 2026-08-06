@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from '../../src/auth/auth.controller.js';
+import type { AuthRateLimitService } from '../../src/auth/auth-rate-limit.service.js';
 import type { SessionCookieOptions } from '../../src/http/cookie-options.js';
 import type { RequestContextService } from '../../src/http/request-context.js';
 import type { CredentialVerificationService } from '../../src/identity/application/credential-verification.service.js';
@@ -43,9 +44,61 @@ interface ServiceOverrides {
   revokeSession?: SessionService['revokeSession'];
 }
 
+interface RateLimitCalls {
+  guardLogin: Array<{ ip: string | null; email: string }>;
+  recordLoginFailure: Array<{ ip: string | null; email: string }>;
+  resetLoginFailures: Array<{ ip: string | null; email: string }>;
+  guardRefresh: string[];
+  recordRefreshFailure: string[];
+  guardEndpoint: string[];
+  blockLogin?: boolean;
+  blockRefresh?: boolean;
+  blockEndpoint?: boolean;
+}
+
+function createRateLimits(calls: RateLimitCalls): AuthRateLimitService {
+  return {
+    guardLogin: (ip: string | null, email: string) => {
+      calls.guardLogin.push({ ip, email });
+      if (calls.blockLogin) {
+        throw new UnauthorizedException('Too many requests');
+      }
+    },
+    recordLoginFailure: (ip: string | null, email: string) => {
+      calls.recordLoginFailure.push({ ip, email });
+    },
+    resetLoginFailures: (ip: string | null, email: string) => {
+      calls.resetLoginFailures.push({ ip, email });
+    },
+    guardRefresh: (ip: string | null) => {
+      calls.guardRefresh.push(ip ?? 'null');
+      if (calls.blockRefresh) {
+        throw new UnauthorizedException('Too many requests');
+      }
+    },
+    recordRefreshFailure: (ip: string | null) => {
+      calls.recordRefreshFailure.push(ip ?? 'null');
+    },
+    guardEndpoint: (ip: string | null) => {
+      calls.guardEndpoint.push(ip ?? 'null');
+      if (calls.blockEndpoint) {
+        throw new UnauthorizedException('Too many requests');
+      }
+    },
+  } as unknown as AuthRateLimitService;
+}
+
 function createController(
   overrides: ServiceOverrides = {},
   cookie: SessionCookieOptions = INSECURE_COOKIE,
+  rateLimits: AuthRateLimitService = createRateLimits({
+    guardLogin: [],
+    recordLoginFailure: [],
+    resetLoginFailures: [],
+    guardRefresh: [],
+    recordRefreshFailure: [],
+    guardEndpoint: [],
+  }),
 ): {
   controller: AuthController;
   contextUpdates: Array<Record<string, unknown>>;
@@ -65,7 +118,7 @@ function createController(
       contextUpdates.push(fields);
     },
   } as unknown as RequestContextService;
-  const controller = new AuthController(cookie, credentials, sessions, requestContext);
+  const controller = new AuthController(cookie, credentials, sessions, requestContext, rateLimits);
   return { controller, contextUpdates };
 }
 
@@ -82,8 +135,8 @@ class FakeReply {
   }
 }
 
-function fakeRequest(cookies: Record<string, string | undefined> = {}): { cookies: Record<string, string | undefined> } {
-  return { cookies };
+function fakeRequest(cookies: Record<string, string | undefined> = {}): { cookies: Record<string, string | undefined>; ip: string } {
+  return { cookies, ip: '127.0.0.1' };
 }
 
 test('login authenticates and sets the session cookie', async () => {
@@ -96,6 +149,7 @@ test('login authenticates and sets the session cookie', async () => {
   const reply = new FakeReply();
   const response = await controller.login(
     { email: 'student@example.com', password: 'correct-password' },
+    fakeRequest() as never,
     reply as never,
   );
 
@@ -115,7 +169,7 @@ test('login rejects with 401 when credentials are invalid', async () => {
       throw new InvalidCredentialsError('Invalid credentials');
     },
   });
-  await assert.rejects(controller.login({ email: 'student@example.com', password: 'wrong' }, new FakeReply() as never), UnauthorizedException);
+  await assert.rejects(controller.login({ email: 'student@example.com', password: 'wrong' }, fakeRequest() as never, new FakeReply() as never), UnauthorizedException);
 });
 
 test('logout revokes the session and clears the cookie', async () => {
@@ -183,7 +237,77 @@ test('session rejects with 401 when there is no active session', async () => {
 test('secure cookies use the __Host- prefix', async () => {
   const { controller } = createController({}, SECURE_COOKIE);
   const reply = new FakeReply();
-  await controller.login({ email: 'student@example.com', password: 'correct-password' }, reply as never);
+  await controller.login({ email: 'student@example.com', password: 'correct-password' }, fakeRequest() as never, reply as never);
   assert.equal(reply.setCookieCalls[0]?.name, '__Host-manara_session');
   assert.equal(SECURE_COOKIE.options.secure, true);
+});
+
+test('login guards before authenticating and resets only the email+IP bucket on success', async () => {
+  const calls: RateLimitCalls = { guardLogin: [], recordLoginFailure: [], resetLoginFailures: [], guardRefresh: [], recordRefreshFailure: [], guardEndpoint: [] };
+  const { controller } = createController({}, INSECURE_COOKIE, createRateLimits(calls));
+  const reply = new FakeReply();
+  await controller.login({ email: 'student@example.com', password: 'correct-password' }, fakeRequest() as never, reply as never);
+  assert.deepEqual(calls.guardLogin, [{ ip: '127.0.0.1', email: 'student@example.com' }]);
+  assert.deepEqual(calls.recordLoginFailure, []);
+  assert.deepEqual(calls.resetLoginFailures, [{ ip: '127.0.0.1', email: 'student@example.com' }]);
+});
+
+test('invalid credentials consume both login limits and never expose account existence', async () => {
+  const calls: RateLimitCalls = { guardLogin: [], recordLoginFailure: [], resetLoginFailures: [], guardRefresh: [], recordRefreshFailure: [], guardEndpoint: [] };
+  const { controller } = createController(
+    {
+      authenticate: async () => {
+        throw new InvalidCredentialsError('Invalid credentials');
+      },
+    },
+    INSECURE_COOKIE,
+    createRateLimits(calls),
+  );
+  await assert.rejects(controller.login({ email: 'student@example.com', password: 'wrong' }, fakeRequest() as never, new FakeReply() as never), UnauthorizedException);
+  assert.deepEqual(calls.recordLoginFailure, [{ ip: '127.0.0.1', email: 'student@example.com' }]);
+  assert.deepEqual(calls.resetLoginFailures, []);
+});
+
+test('a blocked login is rejected before authentication', async () => {
+  const calls: RateLimitCalls = { guardLogin: [], recordLoginFailure: [], resetLoginFailures: [], guardRefresh: [], recordRefreshFailure: [], guardEndpoint: [], blockLogin: true };
+  const { controller } = createController({}, INSECURE_COOKIE, createRateLimits(calls));
+  await assert.rejects(
+    controller.login({ email: 'student@example.com', password: 'correct-password' }, fakeRequest() as never, new FakeReply() as never),
+    UnauthorizedException,
+  );
+  assert.deepEqual(calls.recordLoginFailure, [], 'blocked attempts must not consume further');
+});
+
+test('invalid refresh attempts consume the refresh limit', async () => {
+  const calls: RateLimitCalls = { guardLogin: [], recordLoginFailure: [], resetLoginFailures: [], guardRefresh: [], recordRefreshFailure: [], guardEndpoint: [] };
+  const { controller } = createController({ rotateSession: async () => null }, INSECURE_COOKIE, createRateLimits(calls));
+  await assert.rejects(controller.refresh(fakeRequest() as never, new FakeReply() as never), UnauthorizedException);
+  assert.deepEqual(calls.guardRefresh, ['127.0.0.1']);
+  assert.deepEqual(calls.recordRefreshFailure, ['127.0.0.1']);
+});
+
+test('a valid refresh does not consume the refresh limit', async () => {
+  const calls: RateLimitCalls = { guardLogin: [], recordLoginFailure: [], resetLoginFailures: [], guardRefresh: [], recordRefreshFailure: [], guardEndpoint: [] };
+  const { controller } = createController({}, INSECURE_COOKIE, createRateLimits(calls));
+  const reply = new FakeReply();
+  await controller.refresh(fakeRequest({ manara_session: 'session-token' }) as never, reply as never);
+  assert.deepEqual(calls.guardRefresh, ['127.0.0.1']);
+  assert.deepEqual(calls.recordRefreshFailure, []);
+});
+
+test('session and logout consume the lighter endpoint limit on every request', async () => {
+  const calls: RateLimitCalls = { guardLogin: [], recordLoginFailure: [], resetLoginFailures: [], guardRefresh: [], recordRefreshFailure: [], guardEndpoint: [] };
+  const { controller } = createController({}, INSECURE_COOKIE, createRateLimits(calls));
+  const reply = new FakeReply();
+  const requestWithCookie = fakeRequest({ manara_session: 'session-token' });
+  await controller.session(requestWithCookie as never);
+  await controller.logout(requestWithCookie as never, reply as never);
+  assert.deepEqual(calls.guardEndpoint, ['127.0.0.1', '127.0.0.1']);
+});
+
+test('a blocked session or logout request is rejected', async () => {
+  const calls: RateLimitCalls = { guardLogin: [], recordLoginFailure: [], resetLoginFailures: [], guardRefresh: [], recordRefreshFailure: [], guardEndpoint: [], blockEndpoint: true };
+  const { controller } = createController({}, INSECURE_COOKIE, createRateLimits(calls));
+  await assert.rejects(controller.session(fakeRequest() as never), UnauthorizedException);
+  await assert.rejects(controller.logout(fakeRequest() as never, new FakeReply() as never), UnauthorizedException);
 });

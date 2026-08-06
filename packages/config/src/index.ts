@@ -26,6 +26,15 @@ export const apiEnvSchema = baseEnvSchema.extend({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
+  // Authentication abuse protection (in-memory per instance; see AuthModule).
+  AUTH_LOGIN_IP_MAX_FAILURES: z.coerce.number().int().min(1).max(10_000).default(20),
+  AUTH_LOGIN_IP_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
+  AUTH_LOGIN_EMAIL_IP_MAX_FAILURES: z.coerce.number().int().min(1).max(1_000).default(5),
+  AUTH_LOGIN_EMAIL_IP_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
+  AUTH_REFRESH_IP_MAX_REQUESTS: z.coerce.number().int().min(1).max(10_000).default(30),
+  AUTH_REFRESH_IP_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
+  AUTH_ENDPOINT_IP_MAX_REQUESTS: z.coerce.number().int().min(1).max(100_000).default(120),
+  AUTH_ENDPOINT_IP_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
 });
 
 export const workerEnvSchema = baseEnvSchema
