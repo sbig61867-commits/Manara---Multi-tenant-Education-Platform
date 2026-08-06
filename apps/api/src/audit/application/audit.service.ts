@@ -13,6 +13,7 @@ import type {
   AuditQueryCriteria,
   AuditScope,
   AuditTarget,
+  PlatformAuditQueryCriteria,
 } from '../domain/types.js';
 import type { AuditContextResolver } from '../ports/audit-context.js';
 import { requireAuditTenantContext } from '../ports/audit-context.js';
@@ -118,31 +119,42 @@ export class AuditService {
     if (criteria.tenantId !== undefined && criteria.tenantId !== tenantId) {
       throw new CrossTenantReadDeniedError('Cross-tenant audit reads are denied by default');
     }
-    this.assertValidCriteriaStrings(criteria);
-    if (criteria.from !== undefined && !this.isValidDate(criteria.from)) {
-      throw new InvalidAuditQueryError('Audit query from date must be a valid date');
-    }
-    if (criteria.to !== undefined && !this.isValidDate(criteria.to)) {
-      throw new InvalidAuditQueryError('Audit query to date must be a valid date');
-    }
-    if (
-      criteria.from !== undefined &&
-      criteria.to !== undefined &&
-      criteria.from.getTime() > criteria.to.getTime()
-    ) {
-      throw new InvalidAuditQueryError('Audit query from date must not be after the to date');
-    }
-    const limit = criteria.limit ?? DEFAULT_QUERY_LIMIT;
-    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_QUERY_LIMIT) {
-      throw new InvalidAuditQueryError('Audit query limit must be an integer between 1 and 1000');
-    }
+    this.assertValidQuery(criteria);
     const events = await this.repository.query({
       ...criteria,
       scope: 'tenant',
       tenantId,
-      limit,
+      limit: criteria.limit ?? DEFAULT_QUERY_LIMIT,
     });
     return events.map(deepFreeze);
+  }
+
+  /**
+   * Platform-scoped audit history. Structurally distinct from
+   * `queryAuditHistory`: it never reads the ambient tenant context and the
+   * repository hard-filters to `scope = 'platform' AND tenant_id IS NULL`,
+   * so a platform query can never silently downgrade into a tenant query.
+   */
+  async queryPlatformAuditHistory(criteria: PlatformAuditQueryCriteria): Promise<AuditEvent[]> {
+    this.assertValidQuery(criteria);
+    const events = await this.repository.queryPlatform({
+      ...criteria,
+      limit: criteria.limit ?? DEFAULT_QUERY_LIMIT,
+    });
+    return events.map(deepFreeze);
+  }
+
+  async findTenantAuditEventById(id: string): Promise<AuditEvent | null> {
+    const tenantId = requireAuditTenantContext(this.contextResolver);
+    this.assertValidEventId(id);
+    const event = await this.repository.findTenantEvent(id, tenantId);
+    return event === null ? null : deepFreeze(event);
+  }
+
+  async findPlatformAuditEventById(id: string): Promise<AuditEvent | null> {
+    this.assertValidEventId(id);
+    const event = await this.repository.findPlatformEvent(id);
+    return event === null ? null : deepFreeze(event);
   }
 
   private async buildEvent(
@@ -251,11 +263,55 @@ export class AuditService {
     }
   }
 
-  private assertValidCriteriaStrings(criteria: AuditQueryCriteria): void {
-    for (const field of [criteria.actorId, criteria.action, criteria.targetType, criteria.targetId]) {
+  private assertValidQuery(
+    criteria: AuditQueryCriteria | PlatformAuditQueryCriteria,
+  ): void {
+    for (const field of [
+      'actorId' in criteria ? criteria.actorId : undefined,
+      criteria.actorUserId,
+      criteria.actorPlatformRole,
+      criteria.action,
+      criteria.targetType,
+      criteria.targetId,
+      criteria.requestId,
+    ]) {
       if (field !== undefined && !isNonEmptyString(field)) {
         throw new InvalidAuditQueryError('Audit query filters must be non-empty strings when provided');
       }
+    }
+    if (criteria.from !== undefined && !this.isValidDate(criteria.from)) {
+      throw new InvalidAuditQueryError('Audit query from date must be a valid date');
+    }
+    if (criteria.to !== undefined && !this.isValidDate(criteria.to)) {
+      throw new InvalidAuditQueryError('Audit query to date must be a valid date');
+    }
+    if (
+      criteria.from !== undefined &&
+      criteria.to !== undefined &&
+      criteria.from.getTime() > criteria.to.getTime()
+    ) {
+      throw new InvalidAuditQueryError('Audit query from date must not be after the to date');
+    }
+    const beforeOccurredAt = criteria.beforeOccurredAt;
+    const beforeId = criteria.beforeId;
+    if ((beforeOccurredAt === undefined) !== (beforeId === undefined)) {
+      throw new InvalidAuditQueryError('Audit query cursor must provide both the timestamp and the event id');
+    }
+    if (beforeOccurredAt !== undefined && !this.isValidDate(beforeOccurredAt)) {
+      throw new InvalidAuditQueryError('Audit query cursor timestamp must be a valid date');
+    }
+    if (beforeId !== undefined && !isNonEmptyString(beforeId)) {
+      throw new InvalidAuditQueryError('Audit query cursor event id must be a non-empty string');
+    }
+    const limit = criteria.limit ?? DEFAULT_QUERY_LIMIT;
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_QUERY_LIMIT) {
+      throw new InvalidAuditQueryError('Audit query limit must be an integer between 1 and 1000');
+    }
+  }
+
+  private assertValidEventId(id: string): void {
+    if (!isNonEmptyString(id) || id.length > MAX_ID_LENGTH) {
+      throw new InvalidAuditQueryError('Audit event id must be a non-empty string');
     }
   }
 
