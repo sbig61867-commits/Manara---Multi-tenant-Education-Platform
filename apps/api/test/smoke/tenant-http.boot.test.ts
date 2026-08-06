@@ -112,12 +112,16 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
       // permission provisioning is deliberately outside this smoke fixture.
       const permissionIds = new Map<string, string>();
       for (const key of Object.values(MANAGEMENT_PERMISSIONS)) {
-        const id = randomUUID();
         await database.query(
-          "INSERT INTO permissions (id, key, module, status) VALUES ($1, $2, $3, 'active')",
-          [id, key, key.split(':')[0]],
+          "INSERT INTO permissions (id, key, module, status) VALUES ($1, $2, $3, 'active') ON CONFLICT (key) DO NOTHING",
+          [randomUUID(), key, key.split(':')[0]],
         );
-        permissionIds.set(key, id);
+        const permission = await database.query<{ id: string }>('SELECT id FROM permissions WHERE key = $1', [key]);
+        const permissionId = permission.rows[0]?.id;
+        if (permissionId === undefined) {
+          throw new Error(`Permission fixture row was not found for ${key}`);
+        }
+        permissionIds.set(key, permissionId);
       }
       const adminRoleId = randomUUID();
       await database.query(
