@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import { cursorPaginationSchema, userIdSchema } from '@manara/contracts';
 
+/** Management permissions required for administrative tenant mutations. */
+export const MANAGEMENT_PERMISSIONS = {
+  institutionTransition: 'institution:transition',
+  membershipCreate: 'membership:create',
+  membershipStatusChange: 'membership:status_change',
+  invitationCreate: 'invitation:create',
+  invitationRevoke: 'invitation:revoke',
+} as const;
+
 export const institutionTypeSchema = z.enum([
   'university',
   'school',
