@@ -5,4 +5,5 @@ export interface UsageMeterRepository {
   findById(id: string): Promise<UsageMeter | null>;
   update(meter: UsageMeter): Promise<void>;
   listByTenantAndKey(tenantId: string, quotaKey: string): Promise<UsageMeter[]>;
+  listByTenant(tenantId: string): Promise<UsageMeter[]>;
 }

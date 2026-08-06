@@ -9,6 +9,7 @@ import { AuthorizationHttpModule } from './authorizations/authorization.module.j
 import { DATABASE } from './database/database.constants.js';
 import { DatabaseLifecycle } from './database/database.lifecycle.js';
 import { EntitlementsModule } from './entitlements/entitlements.module.js';
+import { EntitlementsHttpModule } from './entitlements-http/entitlements.module.js';
 import { HealthController } from './health/health.controller.js';
 import { HttpModule } from './http/http.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
@@ -38,6 +39,7 @@ export class AppModule {
               AuthorizationModule.forRoot(options.database),
               AuthorizationHttpModule.forRoot({ database: options.database, config: options.config }),
               EntitlementsModule.forRoot(options.database),
+              EntitlementsHttpModule.forRoot({ database: options.database, config: options.config }),
               AuditModule.forRoot(options.database),
               OutboxModule.forRoot(options.database),
             ],

@@ -71,4 +71,13 @@ export class PostgresUsageMeterRepository implements UsageMeterRepository {
     );
     return result.rows.map((row) => mapMeter(row) as UsageMeter);
   }
+
+  async listByTenant(tenantId: string): Promise<UsageMeter[]> {
+    const result = await this.database.query<UsageMeterRow>(
+      `SELECT ${USAGE_METER_COLUMNS} FROM usage_meters
+       WHERE tenant_id = $1 ORDER BY recorded_at, id`,
+      [tenantId],
+    );
+    return result.rows.map((row) => mapMeter(row) as UsageMeter);
+  }
 }

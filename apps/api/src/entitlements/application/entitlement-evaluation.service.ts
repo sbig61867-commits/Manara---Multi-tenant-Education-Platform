@@ -255,6 +255,11 @@ export class EntitlementEvaluationService {
     });
   }
 
+  async listUsageMeters(): Promise<UsageMeter[]> {
+    const tenantId = requireTenantContext(this.contextResolver);
+    return this.meters.listByTenant(tenantId);
+  }
+
   private async requireReservedMeter(reservationId: string, tenantId: string): Promise<UsageMeter> {
     const meter = await this.meters.findById(reservationId);
     if (meter === null) {

@@ -34,6 +34,7 @@ export interface MappedHttpError {
  * | code starts with `authorization.`, `permission.` | 403 |
  * | code starts with `quota.`, `rate.` | 429 |
  * | code starts with `unavailable.`, `provider.` (fail-closed) | 503 |
+ * | code starts with `entitlements.` | see `statusForEntitlementsCode` |
  * | anything else | 500 |
  */
 export function mapDomainError(error: DomainErrorLike): MappedHttpError {
@@ -50,6 +51,9 @@ export function mapDomainError(error: DomainErrorLike): MappedHttpError {
 }
 
 function statusForCode(code: string): number {
+  if (code.startsWith('entitlements.')) {
+    return statusForEntitlementsCode(code);
+  }
   if (code.endsWith('.not_found') || code.endsWith('_not_found')) {
     return HttpStatus.NOT_FOUND;
   }
@@ -85,6 +89,31 @@ function statusForCode(code: string): number {
     return HttpStatus.SERVICE_UNAVAILABLE;
   }
   return HttpStatus.INTERNAL_SERVER_ERROR;
+}
+
+/**
+ * Maps `entitlements.*` domain errors. Missing/mismatched tenant context and
+ * hard-restricted features fail closed (403); invalid usage is a client
+ * error (400); everything else that is not a 404 is a state conflict (409).
+ */
+function statusForEntitlementsCode(code: string): number {
+  if (code.endsWith('.not_found') || code.endsWith('_not_found')) {
+    return HttpStatus.NOT_FOUND;
+  }
+  if (code.endsWith('.already_exists') || code.endsWith('_already_exists')) {
+    return HttpStatus.CONFLICT;
+  }
+  if (
+    code === 'entitlements.context_missing' ||
+    code === 'entitlements.context_mismatch' ||
+    code === 'entitlements.feature_hard_restricted'
+  ) {
+    return HttpStatus.FORBIDDEN;
+  }
+  if (code === 'entitlements.negative_usage' || code === 'entitlements.invalid_feature_entitlement') {
+    return HttpStatus.BAD_REQUEST;
+  }
+  return HttpStatus.CONFLICT;
 }
 
 export function isDomainError(value: unknown): value is DomainErrorLike {
