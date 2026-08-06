@@ -8,6 +8,7 @@ import { createApiApplication } from '../../src/bootstrap.js';
 import { UserCreationService } from '../../src/identity/application/user-creation.service.js';
 import { AlsTenantContextResolver } from '../../src/tenant/adapters/als-tenant-context.resolver.js';
 import { MembershipService } from '../../src/tenant/application/membership.service.js';
+import { MANAGEMENT_PERMISSIONS } from '../../src/tenants/tenant.dto.js';
 import { MIGRATIONS_DIR, createTestDatabase, getTestDatabaseUrl } from '../integration/helpers.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping tenant smoke tests' : false;
@@ -50,6 +51,7 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
       const userCreation = app.get(UserCreationService);
       const membershipService = app.get(MembershipService);
       const owner = await userCreation.registerUser({ email: `tenant-owner-${Date.now()}@example.com`, password: 'smoke-password-123' });
+      const member = await userCreation.registerUser({ email: `tenant-member-${Date.now()}@example.com`, password: 'smoke-password-123' });
       const invitee = await userCreation.registerUser({ email: `tenant-invitee-${Date.now()}@example.com`, password: 'smoke-password-123' });
       const outsider = await userCreation.registerUser({ email: `tenant-outsider-${Date.now()}@example.com`, password: 'smoke-password-123' });
       const paginationUsers: string[] = [];
@@ -71,6 +73,7 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
       };
 
       const ownerCookie = await login(owner);
+      const memberCookie = await login(member);
       const inviteeCookie = await login(invitee);
       const outsiderCookie = await login(outsider);
 
@@ -101,6 +104,36 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
       await AlsTenantContextResolver.runWithTenant(tenantId, () =>
         membershipService.createMembership({ institutionId: tenantId, userId: owner.id }),
       );
+      const memberMembership = await AlsTenantContextResolver.runWithTenant(tenantId, () =>
+        membershipService.createMembership({ institutionId: tenantId, userId: member.id }),
+      );
+
+      // Test-only permission catalog and tenant-scoped admin role. Production
+      // permission provisioning is deliberately outside this smoke fixture.
+      const permissionIds = new Map<string, string>();
+      for (const key of Object.values(MANAGEMENT_PERMISSIONS)) {
+        const id = randomUUID();
+        await database.query(
+          "INSERT INTO permissions (id, key, module, status) VALUES ($1, $2, $3, 'active')",
+          [id, key, key.split(':')[0]],
+        );
+        permissionIds.set(key, id);
+      }
+      const adminRoleId = randomUUID();
+      await database.query(
+        "INSERT INTO roles (id, tenant_id, name, status) VALUES ($1, $2, 'Tenant Admin', 'active')",
+        [adminRoleId, tenantId],
+      );
+      for (const key of Object.values(MANAGEMENT_PERMISSIONS)) {
+        await database.query(
+          'INSERT INTO role_permissions (role_id, permission_id, tenant_id) VALUES ($1, $2, $3)',
+          [adminRoleId, permissionIds.get(key), tenantId],
+        );
+      }
+      await database.query(
+        "INSERT INTO role_assignments (id, tenant_id, role_id, user_id, scope_type) VALUES ($1, $2, $3, $4, 'tenant')",
+        [randomUUID(), tenantId, adminRoleId, owner.id],
+      );
 
       // --- cross-tenant access is rejected with 403 ---
       const outsiderGet = await app.inject({ method: 'GET', url: `/v1/tenants/${tenantId}`, headers: authHeader(outsiderCookie) });
@@ -115,6 +148,49 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
       assert.equal(outsiderMembership.statusCode, 403);
       const outsiderList = await app.inject({ method: 'GET', url: `/v1/tenants/${tenantId}/memberships`, headers: authHeader(outsiderCookie) });
       assert.equal(outsiderList.statusCode, 403);
+
+      // --- an active member without grants can read but cannot administer ---
+      const memberRead = await app.inject({ method: 'GET', url: `/v1/tenants/${tenantId}`, headers: authHeader(memberCookie) });
+      assert.equal(memberRead.statusCode, 200);
+      const memberMemberships = await app.inject({ method: 'GET', url: `/v1/tenants/${tenantId}/memberships`, headers: authHeader(memberCookie) });
+      assert.equal(memberMemberships.statusCode, 200);
+      const memberInvitations = await app.inject({ method: 'GET', url: `/v1/tenants/${tenantId}/invitations`, headers: authHeader(memberCookie) });
+      assert.equal(memberInvitations.statusCode, 200);
+
+      const memberLifecycle = await app.inject({
+        method: 'PATCH',
+        url: `/v1/tenants/${tenantId}/status`,
+        headers: authHeader(memberCookie),
+        payload: { status: 'active' },
+      });
+      assert.equal(memberLifecycle.statusCode, 403);
+      const memberCreateMembership = await app.inject({
+        method: 'POST',
+        url: `/v1/tenants/${tenantId}/memberships`,
+        headers: authHeader(memberCookie),
+        payload: { userId: outsider.id },
+      });
+      assert.equal(memberCreateMembership.statusCode, 403);
+      const memberChangeMembership = await app.inject({
+        method: 'PATCH',
+        url: `/v1/tenants/${tenantId}/memberships/${memberMembership.id}/status`,
+        headers: authHeader(memberCookie),
+        payload: { status: 'inactive' },
+      });
+      assert.equal(memberChangeMembership.statusCode, 403);
+      const memberCreateInvitation = await app.inject({
+        method: 'POST',
+        url: `/v1/tenants/${tenantId}/invitations`,
+        headers: authHeader(memberCookie),
+        payload: { expiresAt: new Date(Date.now() + 86_400_000).toISOString() },
+      });
+      assert.equal(memberCreateInvitation.statusCode, 403);
+      const memberRevokeInvitation = await app.inject({
+        method: 'POST',
+        url: `/v1/tenants/${tenantId}/invitations/${randomUUID()}/revoke`,
+        headers: authHeader(memberCookie),
+      });
+      assert.equal(memberRevokeInvitation.statusCode, 403);
 
       // --- institution read and lifecycle ---
       const fetched = await app.inject({ method: 'GET', url: `/v1/tenants/${tenantId}`, headers: authHeader(ownerCookie) });

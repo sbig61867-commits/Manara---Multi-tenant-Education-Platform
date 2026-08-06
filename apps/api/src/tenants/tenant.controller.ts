@@ -25,6 +25,9 @@ import {
 } from '@nestjs/common';
 import { RequestContextService } from '../http/request-context.js';
 import { ValidateBody, ValidateParams, ValidateQuery } from '../http/validate.decorators.js';
+import { AuthorizationContextInterceptor } from '../authorizations/authorization-context.interceptor.js';
+import { AuthorizationPermissionInterceptor } from '../authorizations/authorization-permission.interceptor.js';
+import { RequirePermission } from '../authorizations/require-permission.decorator.js';
 import { InstitutionService } from '../tenant/application/institution.service.js';
 import { InvitationService } from '../tenant/application/invitation.service.js';
 import { MembershipService } from '../tenant/application/membership.service.js';
@@ -37,6 +40,7 @@ import {
   INVITATION_RESPONSE_OPENAPI,
   MEMBERSHIP_LIST_RESPONSE_OPENAPI,
   MEMBERSHIP_RESPONSE_OPENAPI,
+  MANAGEMENT_PERMISSIONS,
   acceptInvitationBodySchema,
   acceptInvitationResponseSchema,
   changeMembershipStatusBodySchema,
@@ -174,6 +178,8 @@ export class TenantController {
   }
 
   @Patch(':tenantId/status')
+  @UseInterceptors(AuthorizationContextInterceptor, AuthorizationPermissionInterceptor)
+  @RequirePermission(MANAGEMENT_PERMISSIONS.institutionTransition)
   @ValidateParams(tenantIdParamsSchema)
   @ValidateBody(changeTenantStatusBodySchema)
   @ApiOperation({ summary: 'Transition an institution lifecycle status' })
@@ -238,6 +244,8 @@ export class TenantController {
 
   @Post(':tenantId/memberships')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(AuthorizationContextInterceptor, AuthorizationPermissionInterceptor)
+  @RequirePermission(MANAGEMENT_PERMISSIONS.membershipCreate)
   @ValidateParams(tenantIdParamsSchema)
   @ValidateBody(createMembershipBodySchema)
   @ApiOperation({ summary: 'Create a membership in an institution' })
@@ -260,6 +268,8 @@ export class TenantController {
   }
 
   @Patch(':tenantId/memberships/:membershipId/status')
+  @UseInterceptors(AuthorizationContextInterceptor, AuthorizationPermissionInterceptor)
+  @RequirePermission(MANAGEMENT_PERMISSIONS.membershipStatusChange)
   @ValidateParams(membershipIdParamsSchema)
   @ValidateBody(changeMembershipStatusBodySchema)
   @ApiOperation({ summary: 'Change a membership status' })
@@ -306,6 +316,8 @@ export class TenantController {
 
   @Post(':tenantId/invitations')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(AuthorizationContextInterceptor, AuthorizationPermissionInterceptor)
+  @RequirePermission(MANAGEMENT_PERMISSIONS.invitationCreate)
   @ValidateParams(tenantIdParamsSchema)
   @ValidateBody(createInvitationBodySchema)
   @ApiOperation({ summary: 'Create an invitation; the raw token is returned once' })
@@ -331,6 +343,8 @@ export class TenantController {
 
   @Post(':tenantId/invitations/:invitationId/revoke')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(AuthorizationContextInterceptor, AuthorizationPermissionInterceptor)
+  @RequirePermission(MANAGEMENT_PERMISSIONS.invitationRevoke)
   @ValidateParams(invitationIdParamsSchema)
   @ApiOperation({ summary: 'Revoke a pending invitation' })
   @ApiOkResponse({ description: 'Invitation revoked', schema: INVITATION_RESPONSE_OPENAPI })

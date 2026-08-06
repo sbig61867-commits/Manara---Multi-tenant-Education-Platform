@@ -6,6 +6,9 @@ import { buildSessionCookieOptions, resolveCookieSecure } from '../http/cookie-o
 import { SESSION_ABSOLUTE_TTL_MS } from '../identity/application/session.service.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { TenantModule } from '../tenant/tenant.module.js';
+import { AuthorizationModule } from '../authorization/authorization.module.js';
+import { AuthorizationContextInterceptor } from '../authorizations/authorization-context.interceptor.js';
+import { AuthorizationPermissionInterceptor } from '../authorizations/authorization-permission.interceptor.js';
 import { TenantAccessGuard } from './tenant-access.guard.js';
 import { TenantContextInterceptor } from './tenant-context.interceptor.js';
 import { InvitationController, TenantController } from './tenant.controller.js';
@@ -33,12 +36,18 @@ export class TenantHttpModule {
     });
     return {
       module: TenantHttpModule,
-      imports: [IdentityModule.forRoot(options.database), TenantModule.forRoot(options.database)],
+      imports: [
+        IdentityModule.forRoot(options.database),
+        TenantModule.forRoot(options.database),
+        AuthorizationModule.forRoot(options.database),
+      ],
       controllers: [TenantController, InvitationController],
       providers: [
         { provide: SESSION_COOKIE, useValue: sessionCookie },
         TenantAccessGuard,
         TenantContextInterceptor,
+        AuthorizationContextInterceptor,
+        AuthorizationPermissionInterceptor,
       ],
     };
   }

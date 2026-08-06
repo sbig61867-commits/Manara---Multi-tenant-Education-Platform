@@ -7,6 +7,8 @@ import type { MembershipService } from '../../src/tenant/application/membership.
 import { InstitutionNotFoundError } from '../../src/tenant/domain/errors.js';
 import type { Institution, Invitation } from '../../src/tenant/domain/types.js';
 import { InvitationController, TenantController } from '../../src/tenants/tenant.controller.js';
+import { REQUIRED_PERMISSION_METADATA } from '../../src/authorizations/require-permission.decorator.js';
+import { MANAGEMENT_PERMISSIONS } from '../../src/tenants/tenant.dto.js';
 import { createInstitution, createMembership } from './tenant-helpers.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -88,6 +90,29 @@ function createControllers(overrides: TenantServiceStubs = {}): {
     invitations: new InvitationController(invitations, requestContext as never),
   };
 }
+
+test('tenant administrative handlers declare their required permissions', () => {
+  assert.equal(
+    Reflect.getMetadata(REQUIRED_PERMISSION_METADATA, TenantController.prototype.changeTenantStatus),
+    MANAGEMENT_PERMISSIONS.institutionTransition,
+  );
+  assert.equal(
+    Reflect.getMetadata(REQUIRED_PERMISSION_METADATA, TenantController.prototype.createMembership),
+    MANAGEMENT_PERMISSIONS.membershipCreate,
+  );
+  assert.equal(
+    Reflect.getMetadata(REQUIRED_PERMISSION_METADATA, TenantController.prototype.changeMembershipStatus),
+    MANAGEMENT_PERMISSIONS.membershipStatusChange,
+  );
+  assert.equal(
+    Reflect.getMetadata(REQUIRED_PERMISSION_METADATA, TenantController.prototype.createInvitation),
+    MANAGEMENT_PERMISSIONS.invitationCreate,
+  );
+  assert.equal(
+    Reflect.getMetadata(REQUIRED_PERMISSION_METADATA, TenantController.prototype.revokeInvitation),
+    MANAGEMENT_PERMISSIONS.invitationRevoke,
+  );
+});
 
 test('createInstitution forwards the authenticated user and returns the institution view', async () => {
   let createdBy: string | undefined;
