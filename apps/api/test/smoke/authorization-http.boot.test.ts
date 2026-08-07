@@ -9,6 +9,7 @@ import { AlsTenantContextResolver } from '../../src/tenant/adapters/als-tenant-c
 import { MembershipService } from '../../src/tenant/application/membership.service.js';
 import { MANAGEMENT_PERMISSIONS } from '../../src/authorizations/authorization.dto.js';
 import { MIGRATIONS_DIR, createTestDatabase, getTestDatabaseUrl } from '../integration/helpers.js';
+import { seedPlatformPermissionCatalog } from './helpers/permission-catalog.fixture.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping authorization smoke tests' : false;
 
@@ -35,8 +36,9 @@ test('authorization HTTP endpoints (boot smoke)', { skip }, async () => {
     const runner = new MigrationRunner(database, { migrationsDir: MIGRATIONS_DIR });
     await runner.runMigrations();
     await database.query(
-      'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, permissions, role_permissions, role_assignments CASCADE',
+      'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, role_permissions, role_assignments CASCADE',
     );
+    const permissionIds = await seedPlatformPermissionCatalog(database);
 
     const previous = new Map<string, string | undefined>();
     for (const [key, value] of Object.entries({ LOG_LEVEL: 'error', LOG_PRETTY: 'false', NODE_ENV: 'test' })) {
@@ -87,15 +89,7 @@ test('authorization HTTP endpoints (boot smoke)', { skip }, async () => {
         );
       }
 
-      // --- seed the platform permission catalog + bootstrap roles (no seeds exist) ---
-      const permissionIds = new Map<string, string>();
-      for (const key of Object.values(MANAGEMENT_PERMISSIONS)) {
-        const id = randomUUID();
-        const module = key.split(':')[0] ?? 'role';
-        await database.query("INSERT INTO permissions (id, key, module, status) VALUES ($1, $2, $3, 'active')", [id, key, module]);
-        permissionIds.set(key, id);
-      }
-
+      // --- bootstrap suite-specific roles and grants ---
       const adminRoleId = randomUUID();
       const viewerRoleId = randomUUID();
       const granterRoleId = randomUUID();
@@ -655,7 +649,7 @@ test('authorization HTTP endpoints (boot smoke)', { skip }, async () => {
   } finally {
     try {
       await database.query(
-        'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, permissions, role_permissions, role_assignments CASCADE',
+        'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, role_permissions, role_assignments CASCADE',
       );
     } finally {
       await database.close();

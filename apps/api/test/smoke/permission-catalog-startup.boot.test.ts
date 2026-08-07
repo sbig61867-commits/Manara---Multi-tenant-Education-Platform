@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { apiEnvSchema, loadConfig } from '@manara/config';
 import { MigrationRunner, type PostgresDatabase } from '@manara/database';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { PostgresPermissionRepository } from '../../src/authorization/adapters/postgres-permission.repository.js';
-import { PostgresAuthorizationTransactionRunner } from '../../src/authorization/adapters/postgres-transaction-runner.js';
-import { PermissionCatalogService } from '../../src/authorization/application/permission-catalog.service.js';
 import { PermissionCatalogStartupError } from '../../src/authorization/application/permission-catalog-startup-verifier.js';
+import { PLATFORM_PERMISSION_CATALOG } from '../../src/authorization/platform-permission-catalog.js';
 import { createApiApplication } from '../../src/bootstrap.js';
 import { MIGRATIONS_DIR, createTestDatabase, getTestDatabaseUrl } from '../integration/helpers.js';
+import { seedPlatformPermissionCatalog } from './helpers/permission-catalog.fixture.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping permission catalog startup smoke tests' : false;
 
@@ -43,15 +43,7 @@ function withProductionEnv(databaseUrl: string | undefined): () => void {
 async function prepareDatabase(): Promise<PostgresDatabase> {
   const database = createTestDatabase();
   await new MigrationRunner(database, { migrationsDir: MIGRATIONS_DIR }).runMigrations();
-  await database.query('TRUNCATE TABLE permissions CASCADE');
   return database;
-}
-
-function catalogService(database: PostgresDatabase): PermissionCatalogService {
-  return new PermissionCatalogService(
-    new PostgresPermissionRepository(database),
-    new PostgresAuthorizationTransactionRunner(database),
-  );
 }
 
 test('production boot succeeds only after the complete catalog exists', { skip }, async () => {
@@ -59,8 +51,23 @@ test('production boot succeeds only after the complete catalog exists', { skip }
   const restore = withProductionEnv(getTestDatabaseUrl() ?? undefined);
   let app: NestFastifyApplication | null = null;
   try {
-    const service = catalogService(database);
-    await service.seedCatalog();
+    const unknownKey = 'test:unknown_permission';
+    await database.query(
+      "INSERT INTO permissions (id, key, module, description, status) VALUES ($1, $2, 'test', 'Unknown fixture row.', 'inactive') ON CONFLICT (key) DO NOTHING",
+      [randomUUID(), unknownKey],
+    );
+    const unknownBefore = await database.query<{ id: string; module: string; description: string | null; status: string }>(
+      'SELECT id, module, description, status FROM permissions WHERE key = $1',
+      [unknownKey],
+    );
+    const firstPermissionIds = await seedPlatformPermissionCatalog(database);
+    const secondPermissionIds = await seedPlatformPermissionCatalog(database);
+    assert.deepEqual([...secondPermissionIds], [...firstPermissionIds]);
+    const unknownAfter = await database.query<{ id: string; module: string; description: string | null; status: string }>(
+      'SELECT id, module, description, status FROM permissions WHERE key = $1',
+      [unknownKey],
+    );
+    assert.deepEqual(unknownAfter.rows, unknownBefore.rows);
     const config = loadConfig({ schema: apiEnvSchema, service: 'api' });
     app = await createApiApplication(config);
     assert.ok(app);
@@ -75,8 +82,7 @@ test('production boot fails before initialization when a required key is missing
   const database = await prepareDatabase();
   const restore = withProductionEnv(getTestDatabaseUrl() ?? undefined);
   try {
-    const service = catalogService(database);
-    await service.seedCatalog();
+    await seedPlatformPermissionCatalog(database);
     await database.query("DELETE FROM permissions WHERE key = 'invitation:revoke'");
     const config = loadConfig({ schema: apiEnvSchema, service: 'api' });
     await assert.rejects(createApiApplication(config), (error: unknown) => {
@@ -87,7 +93,7 @@ test('production boot fails before initialization when a required key is missing
       return true;
     });
   } finally {
-    await catalogService(database).seedCatalog();
+    await seedPlatformPermissionCatalog(database);
     await database.close();
     restore();
   }
@@ -97,6 +103,9 @@ test('production boot fails closed when the catalog is empty', { skip }, async (
   const database = await prepareDatabase();
   const restore = withProductionEnv(getTestDatabaseUrl() ?? undefined);
   try {
+    await database.query('DELETE FROM permissions WHERE key = ANY($1::text[])', [
+      PLATFORM_PERMISSION_CATALOG.map(({ key }) => key),
+    ]);
     const config = loadConfig({ schema: apiEnvSchema, service: 'api' });
     await assert.rejects(createApiApplication(config), (error: unknown) => {
       assert.ok(error instanceof PermissionCatalogStartupError);
@@ -106,7 +115,7 @@ test('production boot fails closed when the catalog is empty', { skip }, async (
       return true;
     });
   } finally {
-    await catalogService(database).seedCatalog();
+    await seedPlatformPermissionCatalog(database);
     await database.close();
     restore();
   }
