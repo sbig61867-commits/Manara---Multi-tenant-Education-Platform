@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { apiEnvSchema, loadConfig } from '@manara/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { FastifyInstance } from 'fastify';
 import { createApiApplication } from '../../src/bootstrap.js';
 import { EXPECTED_SECURITY_HEADERS } from '../../src/http/security-headers.js';
 
@@ -57,6 +58,29 @@ async function expectBootFailure(
   }
 }
 
+function exposeResolvedClientIp(app: NestFastifyApplication): void {
+  const instance = app.getHttpAdapter().getInstance() as FastifyInstance;
+  instance.addHook('onRequest', (request, reply, done) => {
+    void reply.header('x-test-resolved-client-ip', request.ip);
+    done();
+  });
+}
+
+async function resolvedClientIp(
+  app: NestFastifyApplication,
+  remoteAddress: string,
+  forwardedFor: string,
+): Promise<string | undefined> {
+  const response = await app.inject({
+    method: 'GET',
+    url: '/health',
+    remoteAddress,
+    headers: { 'x-forwarded-for': forwardedFor },
+  });
+  assert.equal(response.statusCode, 200);
+  return response.headers['x-test-resolved-client-ip'];
+}
+
 test('the application boots and /health returns 200 with request id and security headers', async () => {
   await withApi({ API_CORS_ORIGINS: '' }, async (app) => {
     const response = await app.inject({ method: 'GET', url: '/health' });
@@ -68,6 +92,31 @@ test('the application boots and /health returns 200 with request id and security
     for (const header of EXPECTED_SECURITY_HEADERS) {
       assert.ok(response.headers[header], `expected security header ${header}`);
     }
+  });
+});
+
+test('disabled proxy trust ignores attacker-controlled forwarding headers', async () => {
+  await withApi({ API_TRUST_PROXY: 'off' }, async (app) => {
+    exposeResolvedClientIp(app);
+    assert.equal(await resolvedClientIp(app, '192.0.2.10', '198.51.100.99'), '192.0.2.10');
+  });
+});
+
+test('one trusted hop resolves the nearest forwarded client and ignores farther entries', async () => {
+  await withApi({ API_TRUST_PROXY: '1' }, async (app) => {
+    exposeResolvedClientIp(app);
+    assert.equal(
+      await resolvedClientIp(app, '10.0.0.10', '203.0.113.77, 198.51.100.20'),
+      '198.51.100.20',
+    );
+  });
+});
+
+test('CIDR trust accepts trusted ingress and rejects forwarding from an untrusted peer', async () => {
+  await withApi({ API_TRUST_PROXY: '10.0.0.0/8' }, async (app) => {
+    exposeResolvedClientIp(app);
+    assert.equal(await resolvedClientIp(app, '10.2.3.4', '198.51.100.21'), '198.51.100.21');
+    assert.equal(await resolvedClientIp(app, '192.0.2.11', '198.51.100.22'), '192.0.2.11');
   });
 });
 

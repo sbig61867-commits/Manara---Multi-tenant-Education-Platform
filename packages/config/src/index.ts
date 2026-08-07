@@ -1,7 +1,47 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { config as loadEnvFile } from 'dotenv';
 import { z } from 'zod';
+
+export type ApiTrustProxy = boolean | number | string[];
+
+const MAX_TRUSTED_PROXY_HOPS = 16;
+
+function parseTrustedProxyEntry(entry: string): boolean {
+  const parts = entry.split('/');
+  if (parts.length === 1) return isIP(entry) !== 0;
+  if (parts.length !== 2) return false;
+
+  const [address, rawPrefix] = parts;
+  if (address === undefined || rawPrefix === undefined) return false;
+  const version = isIP(address);
+  if (version === 0 || !/^\d+$/.test(rawPrefix)) return false;
+
+  return Number(rawPrefix) <= (version === 4 ? 32 : 128);
+}
+
+function parseApiTrustProxy(value: string, context: z.RefinementCtx): ApiTrustProxy {
+  const normalized = value.trim();
+  if (normalized === 'off' || normalized === 'false') return false;
+  if (normalized === 'true') return true;
+
+  if (/^\d+$/.test(normalized)) {
+    const hops = Number(normalized);
+    if (hops >= 1 && hops <= MAX_TRUSTED_PROXY_HOPS) return hops;
+  } else {
+    const entries = normalized.split(',').map((entry) => entry.trim());
+    if (entries.length > 0 && entries.every((entry) => entry !== '' && parseTrustedProxyEntry(entry))) {
+      return entries;
+    }
+  }
+
+  context.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'API_TRUST_PROXY must be off, false, true, a hop count from 1 to 16, or an IP/CIDR allowlist',
+  });
+  return z.NEVER;
+}
 
 export const baseEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
@@ -22,10 +62,7 @@ export const apiEnvSchema = baseEnvSchema.extend({
   API_ENABLE_DOCS: z.enum(['auto', 'true', 'false']).default('auto'),
   API_COOKIE_SECURE: z.enum(['auto', 'true', 'false']).default('auto'),
   API_COOKIE_NAME: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).default('manara_session'),
-  API_TRUST_PROXY: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
+  API_TRUST_PROXY: z.string().default('off').transform(parseApiTrustProxy),
   // Authentication abuse protection (in-memory per instance; see AuthModule).
   AUTH_LOGIN_IP_MAX_FAILURES: z.coerce.number().int().min(1).max(10_000).default(20),
   AUTH_LOGIN_IP_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
@@ -44,6 +81,16 @@ export const apiEnvSchema = baseEnvSchema.extend({
       code: z.ZodIssueCode.custom,
       path: ['API_COOKIE_SECURE'],
       message: 'API_COOKIE_SECURE must not be false in staging or production',
+    });
+  }
+  if (
+    (value.NODE_ENV === 'staging' || value.NODE_ENV === 'production')
+    && value.API_TRUST_PROXY === true
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['API_TRUST_PROXY'],
+      message: 'API_TRUST_PROXY=true is not allowed in staging or production; use off, a hop count, or an IP/CIDR allowlist',
     });
   }
 });
