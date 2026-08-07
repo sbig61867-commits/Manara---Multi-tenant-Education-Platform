@@ -57,6 +57,7 @@ export const baseEnvSchema = z.object({
 export const apiEnvSchema = baseEnvSchema.extend({
   API_HOST: z.string().min(1).default('0.0.0.0'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  API_DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(5),
   API_CORS_ORIGINS: z.string().default(''),
   API_BODY_LIMIT_BYTES: z.coerce.number().int().min(1024).max(104_857_600).default(1_048_576),
   API_ENABLE_DOCS: z.enum(['auto', 'true', 'false']).default('auto'),
@@ -99,6 +100,7 @@ export const workerEnvSchema = baseEnvSchema
   .extend({
     WORKER_HOST: z.string().min(1).default('0.0.0.0'),
     WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+    WORKER_DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(2),
     WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(250).max(3_600_000).default(5_000),
     WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
     WORKER_CLAIM_LEASE_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(300_000),

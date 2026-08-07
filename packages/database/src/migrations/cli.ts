@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { loadDotenv } from '@manara/config';
 import { resolveDatabaseConfig } from '../config.js';
 import { PostgresDatabase } from '../pool.js';
-import type { TransactionalExecutor } from '../pool.js';
+import type { DatabaseOptions, TransactionalExecutor } from '../pool.js';
 import { discoverMigrations, MigrationRunner } from './runner.js';
 
 interface MigrationDatabase extends TransactionalExecutor {
@@ -21,7 +21,7 @@ export interface MigrationCliOptions {
   signal?: AbortSignal;
   migrationsDir?: string;
   loadEnvironment?: () => void;
-  createDatabase?: (connectionString: string) => MigrationDatabase;
+  createDatabase?: (options: DatabaseOptions) => MigrationDatabase;
   execute?: (
     database: MigrationDatabase,
     migrationsDir: string,
@@ -76,9 +76,13 @@ export async function runMigrationCli(options: MigrationCliOptions = {}): Promis
     if (options.signal?.aborted === true) {
       throw new Error('Migration execution interrupted');
     }
-    database = (options.createDatabase ?? ((connectionString) => new PostgresDatabase({ connectionString })))(
-      config.connectionString,
-    );
+    const databaseOptions: DatabaseOptions = {
+      connectionString: config.connectionString,
+      max: 1,
+      connectionTimeoutMillis: config.connectionTimeoutMillis,
+      idleTimeoutMillis: config.idleTimeoutMillis,
+    };
+    database = (options.createDatabase ?? ((poolOptions) => new PostgresDatabase(poolOptions)))(databaseOptions);
     summary = await (options.execute ?? executeMigrations)(
       database,
       options.migrationsDir ?? resolveMigrationDirectory(),

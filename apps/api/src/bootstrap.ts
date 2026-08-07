@@ -22,7 +22,13 @@ export async function createApiApplication(config: ApiEnv): Promise<NestFastifyA
 
   const databaseConfig = resolveDatabaseConfig();
   const database = databaseConfig
-    ? new PostgresDatabase({ connectionString: databaseConfig.connectionString, logger: fromPinoLogger(logger) })
+    ? new PostgresDatabase({
+        connectionString: databaseConfig.connectionString,
+        max: config.API_DATABASE_POOL_MAX,
+        connectionTimeoutMillis: databaseConfig.connectionTimeoutMillis,
+        idleTimeoutMillis: databaseConfig.idleTimeoutMillis,
+        logger: fromPinoLogger(logger),
+      })
     : null;
 
   let app: NestFastifyApplication | null = null;

@@ -7,6 +7,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { PermissionCatalogStartupError } from '../../src/authorization/application/permission-catalog-startup-verifier.js';
 import { PLATFORM_PERMISSION_CATALOG } from '../../src/authorization/platform-permission-catalog.js';
 import { createApiApplication } from '../../src/bootstrap.js';
+import { DATABASE } from '../../src/database/database.constants.js';
 import { MIGRATIONS_DIR, createTestDatabase, getTestDatabaseUrl } from '../integration/helpers.js';
 import { seedPlatformPermissionCatalog } from './helpers/permission-catalog.fixture.js';
 
@@ -19,6 +20,9 @@ function withProductionEnv(databaseUrl: string | undefined): () => void {
     LOG_LEVEL: 'error',
     LOG_PRETTY: 'false',
     API_CORS_ORIGINS: 'https://app.example.com',
+    API_DATABASE_POOL_MAX: '9',
+    DATABASE_CONNECTION_TIMEOUT_MS: '14000',
+    DATABASE_IDLE_TIMEOUT_MS: '42000',
   } as const;
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(overrides)) {
@@ -71,6 +75,12 @@ test('production boot succeeds only after the complete catalog exists', { skip }
     const config = loadConfig({ schema: apiEnvSchema, service: 'api' });
     app = await createApiApplication(config);
     assert.ok(app);
+    const appDatabase = app.get(DATABASE) as unknown as {
+      pool: { options: { max: number; connectionTimeoutMillis: number; idleTimeoutMillis: number } };
+    };
+    assert.equal(appDatabase.pool.options.max, 9);
+    assert.equal(appDatabase.pool.options.connectionTimeoutMillis, 14000);
+    assert.equal(appDatabase.pool.options.idleTimeoutMillis, 42000);
   } finally {
     await app?.close();
     await database.close();

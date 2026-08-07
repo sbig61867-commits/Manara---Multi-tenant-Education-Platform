@@ -12,6 +12,7 @@ const CONSUMED_KEYS = [
   'WEB_PORT',
   'API_HOST',
   'API_PORT',
+  'API_DATABASE_POOL_MAX',
   'API_CORS_ORIGINS',
   'API_BODY_LIMIT_BYTES',
   'API_ENABLE_DOCS',
@@ -28,6 +29,7 @@ const CONSUMED_KEYS = [
   'AUTH_ENDPOINT_IP_WINDOW_MS',
   'WORKER_HOST',
   'WORKER_HEALTH_PORT',
+  'WORKER_DATABASE_POOL_MAX',
   'WORKER_POLL_INTERVAL_MS',
   'WORKER_BATCH_SIZE',
   'WORKER_CLAIM_LEASE_MS',
@@ -36,6 +38,8 @@ const CONSUMED_KEYS = [
   'WORKER_CLAIM_SCOPE',
   'WORKER_CLAIM_TENANT_ID',
   'DATABASE_URL',
+  'DATABASE_CONNECTION_TIMEOUT_MS',
+  'DATABASE_IDLE_TIMEOUT_MS',
 ] as const;
 
 test('protected API environments reject explicitly insecure cookies', () => {
@@ -52,7 +56,27 @@ test('development and test retain local defaults', () => {
     if (result.success) {
       assert.equal(result.data.API_COOKIE_SECURE, 'auto');
       assert.equal(result.data.API_TRUST_PROXY, false);
+      assert.equal(result.data.API_DATABASE_POOL_MAX, 5);
     }
+  }
+});
+
+test('API and worker database pool budgets accept bounded overrides', () => {
+  const api = apiEnvSchema.safeParse({ API_DATABASE_POOL_MAX: '12' });
+  assert.equal(api.success, true);
+  if (api.success) assert.equal(api.data.API_DATABASE_POOL_MAX, 12);
+
+  const worker = workerEnvSchema.safeParse({ WORKER_DATABASE_POOL_MAX: '7' });
+  assert.equal(worker.success, true);
+  if (worker.success) assert.equal(worker.data.WORKER_DATABASE_POOL_MAX, 7);
+});
+
+test('API and worker database pool budgets reject invalid values', () => {
+  for (const API_DATABASE_POOL_MAX of ['0', '-1', '1.5', '51', 'invalid']) {
+    assert.equal(apiEnvSchema.safeParse({ API_DATABASE_POOL_MAX }).success, false);
+  }
+  for (const WORKER_DATABASE_POOL_MAX of ['0', '-1', '1.5', '21', 'invalid']) {
+    assert.equal(workerEnvSchema.safeParse({ WORKER_DATABASE_POOL_MAX }).success, false);
   }
 });
 
@@ -102,6 +126,9 @@ test('unrestricted proxy trust is development/test-only', () => {
 });
 
 test('worker numeric ranges and tenant scope remain validated', () => {
+  const defaults = workerEnvSchema.safeParse({});
+  assert.equal(defaults.success, true);
+  if (defaults.success) assert.equal(defaults.data.WORKER_DATABASE_POOL_MAX, 2);
   assert.equal(workerEnvSchema.safeParse({ WORKER_BATCH_SIZE: '0' }).success, false);
   assert.equal(workerEnvSchema.safeParse({ WORKER_CLAIM_SCOPE: 'tenant' }).success, false);
   assert.equal(
