@@ -33,7 +33,7 @@ export function buildSessionCookieOptions(config: SessionCookieConfig): SessionC
 }
 
 export function resolveCookieSecure(mode: 'auto' | 'true' | 'false', nodeEnv: string): boolean {
-  return mode === 'true' || (mode === 'auto' && nodeEnv === 'production');
+  return mode === 'true' || (mode === 'auto' && (nodeEnv === 'staging' || nodeEnv === 'production'));
 }
 
 export function resolveDocsEnabled(mode: 'auto' | 'true' | 'false', nodeEnv: string): boolean {

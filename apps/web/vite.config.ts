@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
+import { resolveWebEnvironment, type WebEnvironmentMode } from './src/env.ts';
 
 function toPort(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -7,9 +8,11 @@ function toPort(value: string | undefined, fallback: number): number {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '../../', '');
-  const webPort = toPort(env.WEB_PORT, 5173);
-  const apiPort = toPort(env.API_PORT, 3000);
+  const publicEnv = loadEnv(mode, '../../', 'VITE_');
+  resolveWebEnvironment(publicEnv, mode as WebEnvironmentMode);
+  const toolingEnv = loadEnv(mode, '../../', ['WEB_PORT', 'API_PORT']);
+  const webPort = toPort(toolingEnv.WEB_PORT, 5173);
+  const apiPort = toPort(toolingEnv.API_PORT, 3000);
   return {
     plugins: [react()],
     envDir: '../../',

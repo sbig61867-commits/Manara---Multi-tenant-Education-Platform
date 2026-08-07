@@ -155,13 +155,27 @@ test('development with empty API_CORS_ORIGINS boots and serves /health', async (
 test('production with empty API_CORS_ORIGINS fails closed at boot', async () => {
   await expectBootFailure(
     { NODE_ENV: 'production', API_CORS_ORIGINS: '' },
-    /API_CORS_ORIGINS must be configured in production/,
+    /API_CORS_ORIGINS must be configured in staging and production/,
   );
 });
 
 test('production without API_CORS_ORIGINS fails closed at boot', async () => {
   await expectBootFailure(
     { NODE_ENV: 'production', API_CORS_ORIGINS: undefined },
-    /API_CORS_ORIGINS must be configured in production/,
+    /API_CORS_ORIGINS must be configured in staging and production/,
+  );
+});
+
+test('staging without API_CORS_ORIGINS fails closed at boot', async () => {
+  await expectBootFailure(
+    { NODE_ENV: 'staging', API_CORS_ORIGINS: undefined },
+    /API_CORS_ORIGINS must be configured in staging and production/,
+  );
+});
+
+test('staging rejects explicitly insecure session cookies during configuration', () => {
+  assert.equal(
+    apiEnvSchema.safeParse({ NODE_ENV: 'staging', API_COOKIE_SECURE: 'false' }).success,
+    false,
   );
 });
