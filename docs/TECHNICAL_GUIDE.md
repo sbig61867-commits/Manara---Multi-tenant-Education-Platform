@@ -1129,6 +1129,40 @@ Mostly free (OSS tooling, rate limiting is code). Pentests and compliance audits
 - Environments: `staging` + `production` (Section 20)
 - DNS + TLS handled by the platform/cloudflare; custom domain per product
 
+### Permission catalog deployment runbook
+
+The platform permission catalog is a required deployment gate for every staging and production database. Apply changes in this order:
+
+1. Apply the release's versioned schema migrations.
+2. With `DATABASE_URL` already supplied through the environment's secret manager, run the permission catalog seed command from the repository root:
+
+   ```sh
+   npm run permissions:seed --workspace @manara/api
+   ```
+
+3. Require a successful exit and confirm that the safe summary reports `required=34`. The command verifies that all 34 required keys exist after reconciliation. It is safe and recommended to run the same command again; an already reconciled catalog reports `inserted=0`, `reconciled=0`, and `unchanged=34`.
+4. Only after verification succeeds, start or restart the API instances.
+
+`DATABASE_URL` must be configured before the command runs. Supply it through the deployment platform or secret manager; never put a connection string directly in a command, shell history, runbook example, source file, or log.
+
+API startup enforces the same invariant in `staging` and `production`: startup fails closed when `DATABASE_URL` is unavailable or any required permission key is missing. The API does not listen until verification succeeds. Development and test modes intentionally retain their lightweight behavior and do not replace this deployment gate.
+
+The seed operation owns exactly 34 platform permission identities. It is transactional, advisory-lock protected, and idempotent. It preserves existing permission IDs and statuses, reconciles only the code-owned `module` and `description` metadata, and does not delete unknown permission rows. It creates no roles, role grants, role assignments, memberships, or users.
+
+Catalog provisioning does not grant administrative authority. Initial tenant creation, administrative role creation, and controlled role assignment are separate bootstrap procedures. Operators must not grant every permission to arbitrary users as part of catalog seeding.
+
+If the API refuses startup because the catalog is incomplete:
+
+1. Verify that the intended environment's `DATABASE_URL` is configured and accessible without printing it.
+2. Confirm that schema migrations for the release completed successfully.
+3. Run `npm run permissions:seed --workspace @manara/api`.
+4. Run the command again and confirm `required=34`, `inserted=0`, `reconciled=0`, and `unchanged=34`.
+5. Restart the API and confirm that startup completes.
+
+Do not recover by manually deleting or recreating permission rows, and never edit an applied migration. Permission keys are stable identities. Automated seeding never deletes catalog rows; any removal or deprecation requires an explicitly approved compatibility change that accounts for existing role grants and deployed clients.
+
+Run the seed command separately for every staging and production database. Test fixtures are not production seeding. Destructive database suites must use isolated databases or run serially; do not point parallel destructive suites at the same shared database.
+
 ### Why this recommendation
 
 - Zero Kubernetes ops while the team is small — managed PaaS covers deploys, scaling, TLS, and rollbacks.
