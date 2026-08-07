@@ -9,4 +9,23 @@ async function bootstrap(): Promise<void> {
   await app.listen({ port: config.API_PORT, host: config.API_HOST });
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  if (error instanceof Error && error.name === 'authorization.permission_catalog_incomplete') {
+    const catalogError = error as Error & {
+      required: number;
+      present: number;
+      missingKeys: readonly string[];
+    };
+    process.stderr.write(
+      `${JSON.stringify({
+        code: error.name,
+        required: catalogError.required,
+        present: catalogError.present,
+        missingKeys: catalogError.missingKeys,
+      })}\n`,
+    );
+  } else {
+    process.stderr.write('API startup failed.\n');
+  }
+  process.exitCode = 1;
+});

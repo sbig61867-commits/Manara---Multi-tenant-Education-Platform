@@ -5,6 +5,8 @@ import { createLogger } from '@manara/logger';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
+import { PermissionCatalogService } from './authorization/application/permission-catalog.service.js';
+import { verifyPermissionCatalogAtStartup } from './authorization/application/permission-catalog-startup-verifier.js';
 import { resolveDocsEnabled } from './http/cookie-options.js';
 import { setupSwagger } from './http/swagger.js';
 import { configureHttpFoundation } from './http/setup.js';
@@ -23,27 +25,39 @@ export async function createApiApplication(config: ApiEnv): Promise<NestFastifyA
     ? new PostgresDatabase({ connectionString: databaseConfig.connectionString, logger: fromPinoLogger(logger) })
     : null;
 
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule.forRoot({ database, config }),
-    new FastifyAdapter({
-      loggerInstance: logger,
-      bodyLimit: config.API_BODY_LIMIT_BYTES,
-      onProtoPoisoning: 'error',
-      onConstructorPoisoning: 'error',
-      trustProxy: config.API_TRUST_PROXY,
-      allowErrorHandlerOverride: true,
-    }),
-    { logger: false },
-  );
+  let app: NestFastifyApplication | null = null;
+  try {
+    app = await NestFactory.create<NestFastifyApplication>(
+      AppModule.forRoot({ database, config }),
+      new FastifyAdapter({
+        loggerInstance: logger,
+        bodyLimit: config.API_BODY_LIMIT_BYTES,
+        onProtoPoisoning: 'error',
+        onConstructorPoisoning: 'error',
+        trustProxy: config.API_TRUST_PROXY,
+        allowErrorHandlerOverride: true,
+      }),
+      { logger: false },
+    );
 
-  app.setGlobalPrefix(API_VERSION, { exclude: ['health'] });
-  app.enableShutdownHooks();
+    await verifyPermissionCatalogAtStartup(
+      config.NODE_ENV,
+      database === null ? null : () => app!.get(PermissionCatalogService).verifyCatalog(),
+    );
 
-  await configureHttpFoundation(app, config);
+    app.setGlobalPrefix(API_VERSION, { exclude: ['health'] });
+    app.enableShutdownHooks();
 
-  if (resolveDocsEnabled(config.API_ENABLE_DOCS, config.NODE_ENV)) {
-    setupSwagger(app);
+    await configureHttpFoundation(app, config);
+
+    if (resolveDocsEnabled(config.API_ENABLE_DOCS, config.NODE_ENV)) {
+      setupSwagger(app);
+    }
+
+    return app;
+  } catch (error) {
+    await app?.close().catch(() => undefined);
+    await database?.close().catch(() => undefined);
+    throw error;
   }
-
-  return app;
 }
