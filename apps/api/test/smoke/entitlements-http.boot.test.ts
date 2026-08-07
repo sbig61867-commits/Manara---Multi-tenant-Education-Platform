@@ -11,6 +11,7 @@ import { FeatureCatalogService } from '../../src/entitlements/application/featur
 import { PlanCatalogService } from '../../src/entitlements/application/plan-catalog.service.js';
 import { MANAGEMENT_PERMISSIONS } from '../../src/entitlements-http/entitlements.dto.js';
 import { MIGRATIONS_DIR, createTestDatabase, getTestDatabaseUrl } from '../integration/helpers.js';
+import { seedPlatformPermissionCatalog } from './helpers/permission-catalog.fixture.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping entitlements smoke tests' : false;
 
@@ -37,8 +38,9 @@ test('entitlements HTTP endpoints (boot smoke)', { skip }, async () => {
     const runner = new MigrationRunner(database, { migrationsDir: MIGRATIONS_DIR });
     await runner.runMigrations();
     await database.query(
-      'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, permissions, role_permissions, role_assignments, plans, plan_versions, feature_definitions, feature_entitlements, tenant_plan_assignments, tenant_feature_overrides, usage_quotas, usage_meters CASCADE',
+      'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, role_permissions, role_assignments, plans, plan_versions, feature_definitions, feature_entitlements, tenant_plan_assignments, tenant_feature_overrides, usage_quotas, usage_meters CASCADE',
     );
+    const permissionIds = await seedPlatformPermissionCatalog(database);
 
     const previous = new Map<string, string | undefined>();
     for (const [key, value] of Object.entries({ LOG_LEVEL: 'error', LOG_PRETTY: 'false', NODE_ENV: 'test' })) {
@@ -89,14 +91,7 @@ test('entitlements HTTP endpoints (boot smoke)', { skip }, async () => {
         );
       }
 
-      // --- seed the platform permission catalog + roles ---
-      const permissionIds = new Map<string, string>();
-      for (const key of Object.values(MANAGEMENT_PERMISSIONS)) {
-        const id = randomUUID();
-        const module = key.split(':')[0] ?? 'entitlement';
-        await database.query("INSERT INTO permissions (id, key, module, status) VALUES ($1, $2, $3, 'active')", [id, key, module]);
-        permissionIds.set(key, id);
-      }
+      // --- seed suite-specific roles and grants ---
       const adminRoleId = randomUUID();
       const viewerRoleId = randomUUID();
       await database.query("INSERT INTO roles (id, tenant_id, name, status) VALUES ($1, $2, 'Entitlements Admin', 'active')", [adminRoleId, tenantId]);
@@ -418,7 +413,7 @@ test('entitlements HTTP endpoints (boot smoke)', { skip }, async () => {
   } finally {
     try {
       await database.query(
-        'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, permissions, role_permissions, role_assignments, plans, plan_versions, feature_definitions, feature_entitlements, tenant_plan_assignments, tenant_feature_overrides, usage_quotas, usage_meters CASCADE',
+        'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, role_permissions, role_assignments, plans, plan_versions, feature_definitions, feature_entitlements, tenant_plan_assignments, tenant_feature_overrides, usage_quotas, usage_meters CASCADE',
       );
     } finally {
       await database.close();

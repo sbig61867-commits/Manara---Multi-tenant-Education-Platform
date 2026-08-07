@@ -10,6 +10,7 @@ import { AlsTenantContextResolver } from '../../src/tenant/adapters/als-tenant-c
 import { MembershipService } from '../../src/tenant/application/membership.service.js';
 import { MANAGEMENT_PERMISSIONS } from '../../src/tenants/tenant.dto.js';
 import { MIGRATIONS_DIR, createTestDatabase, getTestDatabaseUrl } from '../integration/helpers.js';
+import { seedPlatformPermissionCatalog } from './helpers/permission-catalog.fixture.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping tenant smoke tests' : false;
 
@@ -38,6 +39,7 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
     await database.query(
       'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, outbox_messages CASCADE',
     );
+    const permissionIds = await seedPlatformPermissionCatalog(database);
 
     const previous = new Map<string, string | undefined>();
     for (const [key, value] of Object.entries({ LOG_LEVEL: 'error', LOG_PRETTY: 'false', NODE_ENV: 'test' })) {
@@ -108,21 +110,7 @@ test('tenant HTTP endpoints (boot smoke)', { skip }, async () => {
         membershipService.createMembership({ institutionId: tenantId, userId: member.id }),
       );
 
-      // Test-only permission catalog and tenant-scoped admin role. Production
-      // permission provisioning is deliberately outside this smoke fixture.
-      const permissionIds = new Map<string, string>();
-      for (const key of Object.values(MANAGEMENT_PERMISSIONS)) {
-        await database.query(
-          "INSERT INTO permissions (id, key, module, status) VALUES ($1, $2, $3, 'active') ON CONFLICT (key) DO NOTHING",
-          [randomUUID(), key, key.split(':')[0]],
-        );
-        const permission = await database.query<{ id: string }>('SELECT id FROM permissions WHERE key = $1', [key]);
-        const permissionId = permission.rows[0]?.id;
-        if (permissionId === undefined) {
-          throw new Error(`Permission fixture row was not found for ${key}`);
-        }
-        permissionIds.set(key, permissionId);
-      }
+      // Test-only tenant-scoped role and grants; catalog provisioning is shared.
       const adminRoleId = randomUUID();
       await database.query(
         "INSERT INTO roles (id, tenant_id, name, status) VALUES ($1, $2, 'Tenant Admin', 'active')",

@@ -9,6 +9,7 @@ import { AlsTenantContextResolver } from '../../src/tenant/adapters/als-tenant-c
 import { MembershipService } from '../../src/tenant/application/membership.service.js';
 import { AUDIT_PERMISSIONS } from '../../src/audit-http/audit.dto.js';
 import { MIGRATIONS_DIR, createTestDatabase, getTestDatabaseUrl } from '../integration/helpers.js';
+import { seedPlatformPermissionCatalog } from './helpers/permission-catalog.fixture.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping audit smoke tests' : false;
 
@@ -35,8 +36,9 @@ test('audit HTTP endpoints (boot smoke)', { skip }, async () => {
     const runner = new MigrationRunner(database, { migrationsDir: MIGRATIONS_DIR });
     await runner.runMigrations();
     await database.query(
-      'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, permissions, role_permissions, role_assignments, audit_log CASCADE',
+      'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, role_permissions, role_assignments, audit_log CASCADE',
     );
+    const permissionIds = await seedPlatformPermissionCatalog(database);
 
     const previous = new Map<string, string | undefined>();
     for (const [key, value] of Object.entries({ LOG_LEVEL: 'error', LOG_PRETTY: 'false', NODE_ENV: 'test' })) {
@@ -85,13 +87,7 @@ test('audit HTTP endpoints (boot smoke)', { skip }, async () => {
         );
       }
 
-      // --- seed the platform permission catalog + roles ---
-      const permissionIds = new Map<string, string>();
-      for (const key of Object.values(AUDIT_PERMISSIONS)) {
-        const id = randomUUID();
-        await database.query("INSERT INTO permissions (id, key, module, status) VALUES ($1, $2, 'audit', 'active')", [id, key]);
-        permissionIds.set(key, id);
-      }
+      // --- seed suite-specific roles and grants ---
       const adminRoleId = randomUUID();
       const viewerRoleId = randomUUID();
       await database.query("INSERT INTO roles (id, tenant_id, name, status) VALUES ($1, $2, 'Audit Admin', 'active')", [adminRoleId, tenantId]);
@@ -263,7 +259,7 @@ test('audit HTTP endpoints (boot smoke)', { skip }, async () => {
   } finally {
     try {
       await database.query(
-        'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, permissions, role_permissions, role_assignments, audit_log CASCADE',
+        'TRUNCATE TABLE users, password_identities, auth_sessions, institutions, institution_settings, memberships, invitations, roles, role_permissions, role_assignments, audit_log CASCADE',
       );
     } finally {
       await database.close();
