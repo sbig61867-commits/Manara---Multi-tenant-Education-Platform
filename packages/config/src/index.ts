@@ -35,6 +35,17 @@ export const apiEnvSchema = baseEnvSchema.extend({
   AUTH_REFRESH_IP_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
   AUTH_ENDPOINT_IP_MAX_REQUESTS: z.coerce.number().int().min(1).max(100_000).default(120),
   AUTH_ENDPOINT_IP_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
+}).superRefine((value, context) => {
+  if (
+    (value.NODE_ENV === 'staging' || value.NODE_ENV === 'production')
+    && value.API_COOKIE_SECURE === 'false'
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['API_COOKIE_SECURE'],
+      message: 'API_COOKIE_SECURE must not be false in staging or production',
+    });
+  }
 });
 
 export const workerEnvSchema = baseEnvSchema

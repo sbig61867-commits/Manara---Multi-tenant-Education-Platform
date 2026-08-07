@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
+    "test": "tsx --test test/*.test.ts",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
@@ -24,6 +25,7 @@
     "@manara/tsconfig": "*",
     "@types/node": "^24.13.3",
     "eslint": "^9.39.5",
+    "tsx": "^4.23.5",
     "typescript": "^5.9.3"
   }
 }
