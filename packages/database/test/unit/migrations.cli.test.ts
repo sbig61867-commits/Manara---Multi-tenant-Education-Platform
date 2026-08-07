@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { Transaction } from '../../src/transaction.js';
 import type { MigrationCliOptions, MigrationSummary } from '../../src/migrations/cli.js';
 import { resolveMigrationDirectory, runMigrationCli } from '../../src/migrations/cli.js';
+import type { DatabaseOptions } from '../../src/pool.js';
 
 const SECRET_URL = 'postgres://secret-user:secret-password@db.example.test/manara';
 
@@ -26,12 +27,14 @@ function harness(overrides: MigrationCliOptions = {}) {
   const output: string[] = [];
   const errors: string[] = [];
   let created = 0;
+  let createdWith: DatabaseOptions | null = null;
   const database = new FakeDatabase();
   const options: MigrationCliOptions = {
     env: { DATABASE_URL: SECRET_URL },
     loadEnvironment: () => undefined,
-    createDatabase: () => {
+    createDatabase: (poolOptions) => {
       created += 1;
+      createdWith = poolOptions;
       return database;
     },
     execute: async () => ({ discovered: 7, applied: 7, alreadyApplied: 0, pending: 0 }),
@@ -39,7 +42,7 @@ function harness(overrides: MigrationCliOptions = {}) {
     writeError: (message) => errors.push(message),
     ...overrides,
   };
-  return { options, output, errors, database, created: () => created };
+  return { options, output, errors, database, created: () => created, createdWith: () => createdWith };
 }
 
 test('missing DATABASE_URL fails before pool creation', async () => {
@@ -62,6 +65,26 @@ test('success prints only bounded counts and closes the pool', async () => {
   assert.equal(h.errors.length, 0);
   assert.equal(h.database.closed, true);
   assert.equal(h.output.join('').includes('secret-password'), false);
+  assert.deepEqual(h.createdWith(), {
+    connectionString: SECRET_URL,
+    max: 1,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 10000,
+  });
+});
+
+test('shared timeout overrides reach the one-connection migration pool', async () => {
+  const h = harness({
+    env: {
+      DATABASE_URL: SECRET_URL,
+      DATABASE_CONNECTION_TIMEOUT_MS: '13000',
+      DATABASE_IDLE_TIMEOUT_MS: '47000',
+    },
+  });
+  assert.equal(await runMigrationCli(h.options), 0);
+  assert.equal(h.createdWith()?.max, 1);
+  assert.equal(h.createdWith()?.connectionTimeoutMillis, 13000);
+  assert.equal(h.createdWith()?.idleTimeoutMillis, 47000);
 });
 
 test('execution failure is sanitized and closes the pool', async () => {

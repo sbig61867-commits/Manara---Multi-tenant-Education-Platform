@@ -3,6 +3,8 @@ import type { Server } from 'node:http';
 import { hostname } from 'node:os';
 import { loadConfig, loadDotenv, workerEnvSchema } from '@manara/config';
 import { fromPinoLogger, PostgresDatabase, resolveDatabaseConfig } from '@manara/database';
+import type { DatabaseConfig, DatabaseOptions } from '@manara/database';
+import type { WorkerEnv } from '@manara/config';
 import { createLogger } from '@manara/logger';
 import {
   NoopOutboxEventPublisher,
@@ -31,6 +33,18 @@ let runtime: OutboxDispatcherRuntime | undefined;
 let server: Server | undefined;
 let shuttingDown = false;
 
+export function buildWorkerDatabaseOptions(
+  workerConfig: Pick<WorkerEnv, 'WORKER_DATABASE_POOL_MAX'>,
+  databaseConfig: DatabaseConfig,
+): DatabaseOptions {
+  return {
+    connectionString: databaseConfig.connectionString,
+    max: workerConfig.WORKER_DATABASE_POOL_MAX,
+    connectionTimeoutMillis: databaseConfig.connectionTimeoutMillis,
+    idleTimeoutMillis: databaseConfig.idleTimeoutMillis,
+  };
+}
+
 async function bootstrap(): Promise<void> {
   loadDotenv();
   config = loadConfig({ schema: workerEnvSchema, service: 'worker' });
@@ -48,7 +62,7 @@ async function bootstrap(): Promise<void> {
   }
 
   database = new PostgresDatabase({
-    connectionString: databaseConfig.connectionString,
+    ...buildWorkerDatabaseOptions(activeConfig, databaseConfig),
     logger: fromPinoLogger(activeLogger),
   });
 
@@ -143,7 +157,8 @@ function shutdown(signal: string): void {
   });
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
-
-void bootstrap();
+if (require.main === module) {
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  void bootstrap();
+}

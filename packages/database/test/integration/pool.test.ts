@@ -1,10 +1,31 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { PostgresDatabase } from '../../src/index.js';
 import { CollectingLogger, createTestDatabase, getTestDatabaseUrl, withTestDatabase } from '../helpers.js';
 
 const skip = getTestDatabaseUrl() === null ? 'DATABASE_URL is not set; skipping integration tests' : false;
 
 describe('database pool (integration)', { skip }, () => {
+  test('forwards explicit connection budgets and timeouts to pg.Pool', async () => {
+    const url = getTestDatabaseUrl();
+    assert.ok(url);
+    const database = new PostgresDatabase({
+      connectionString: url,
+      max: 3,
+      connectionTimeoutMillis: 4000,
+      idleTimeoutMillis: 15000,
+    });
+    try {
+      const pool = (database as unknown as {
+        pool: { options: { max: number; connectionTimeoutMillis: number; idleTimeoutMillis: number } };
+      }).pool;
+      assert.equal(pool.options.max, 3);
+      assert.equal(pool.options.connectionTimeoutMillis, 4000);
+      assert.equal(pool.options.idleTimeoutMillis, 15000);
+    } finally {
+      await database.close();
+    }
+  });
   test('creates a pool and closes it cleanly', async () => {
     await withTestDatabase(async (database) => {
       const result = await database.query<{ one: number }>('SELECT 1 AS one');

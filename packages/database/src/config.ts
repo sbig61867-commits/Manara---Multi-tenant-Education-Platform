@@ -16,6 +16,8 @@ export const databaseEnvSchema = z.object({
     .string()
     .min(1, 'DATABASE_URL must not be empty')
     .refine(isValidPostgresUrl, 'DATABASE_URL must be a valid postgres:// or postgresql:// connection string'),
+  DATABASE_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
+  DATABASE_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300000).default(10000),
 });
 
 export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
@@ -25,6 +27,8 @@ export interface DatabaseConfig {
   host: string;
   port: number;
   database: string;
+  connectionTimeoutMillis: number;
+  idleTimeoutMillis: number;
 }
 
 export function resolveDatabaseConfig(env: Record<string, string | undefined> = process.env): DatabaseConfig | null {
@@ -32,7 +36,11 @@ export function resolveDatabaseConfig(env: Record<string, string | undefined> = 
   if (raw === undefined || raw.trim() === '') {
     return null;
   }
-  const parsed = databaseEnvSchema.safeParse({ DATABASE_URL: raw });
+  const parsed = databaseEnvSchema.safeParse({
+    DATABASE_URL: raw,
+    DATABASE_CONNECTION_TIMEOUT_MS: env.DATABASE_CONNECTION_TIMEOUT_MS,
+    DATABASE_IDLE_TIMEOUT_MS: env.DATABASE_IDLE_TIMEOUT_MS,
+  });
   if (!parsed.success) {
     const issues = parsed.error.issues.map((issue) => issue.message).join('; ');
     throw new Error(`Invalid database configuration: ${issues}`);
@@ -43,5 +51,7 @@ export function resolveDatabaseConfig(env: Record<string, string | undefined> = 
     host: url.hostname,
     port: url.port === '' ? 5432 : Number(url.port),
     database: url.pathname.replace(/^\/+/, ''),
+    connectionTimeoutMillis: parsed.data.DATABASE_CONNECTION_TIMEOUT_MS,
+    idleTimeoutMillis: parsed.data.DATABASE_IDLE_TIMEOUT_MS,
   };
 }
