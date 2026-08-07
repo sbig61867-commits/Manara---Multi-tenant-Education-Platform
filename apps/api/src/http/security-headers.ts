@@ -1,8 +1,9 @@
 import helmet from '@fastify/helmet';
+import type { ApiTrustProxy } from '@manara/config';
 import type { ServerResponse } from 'node:http';
 
 export interface HelmetConfig {
-  readonly trustProxy: boolean;
+  readonly trustProxy: ApiTrustProxy;
 }
 
 /**

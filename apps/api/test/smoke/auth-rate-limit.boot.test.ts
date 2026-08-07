@@ -28,6 +28,7 @@ test('auth rate limiting (boot smoke)', { skip }, async () => {
       LOG_LEVEL: 'error',
       LOG_PRETTY: 'false',
       NODE_ENV: 'test',
+      API_TRUST_PROXY: '1',
       AUTH_LOGIN_IP_MAX_FAILURES: '6',
       AUTH_LOGIN_IP_WINDOW_MS: '60000',
       AUTH_LOGIN_EMAIL_IP_MAX_FAILURES: '2',
@@ -51,8 +52,14 @@ test('auth rate limiting (boot smoke)', { skip }, async () => {
       const password = 'smoke-password-123';
       await userCreation.registerUser({ email: existingEmail, password });
 
-      const login = (email: string, attemptPassword: string) =>
-        app.inject({ method: 'POST', url: '/v1/auth/login', payload: { email, password: attemptPassword } });
+      const login = (email: string, attemptPassword: string, clientIp = '198.51.100.30') =>
+        app.inject({
+          method: 'POST',
+          url: '/v1/auth/login',
+          remoteAddress: '10.0.0.10',
+          headers: { 'x-forwarded-for': clientIp },
+          payload: { email, password: attemptPassword },
+        });
 
       // --- account existence is not revealed: identical 401 responses ---
       const existingFailure = await login(existingEmail, 'wrong-password-123');
@@ -90,6 +97,10 @@ test('auth rate limiting (boot smoke)', { skip }, async () => {
       const correctWhileBlocked = await login(existingEmail, password);
       assert.equal(correctWhileBlocked.statusCode, 429);
       assert.equal(JSON.parse(correctWhileBlocked.body).error.code, 'http.too_many_requests');
+
+      // A distinct canonical client IP has independent IP and email+IP buckets.
+      const alternateClient = await login(existingEmail, 'wrong-password-123', '198.51.100.31');
+      assert.equal(alternateClient.statusCode, 401);
 
       // --- different emails from the same IP share the broader IP limit ---
       assert.equal((await login(`ip-fill-1-${Date.now()}@example.com`, 'wrong-password-123')).statusCode, 401);

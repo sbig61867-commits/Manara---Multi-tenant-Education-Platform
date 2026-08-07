@@ -57,6 +57,12 @@ test('protected API configuration rejects explicit insecure cookies', () => {
   }
 });
 
+test('protected API configuration rejects unrestricted proxy trust', () => {
+  for (const NODE_ENV of ['staging', 'production']) {
+    assert.equal(apiEnvSchema.safeParse({ NODE_ENV, API_TRUST_PROXY: 'true' }).success, false);
+  }
+});
+
 test('secure session cookie retains host-only security attributes', () => {
   const cookie = buildSessionCookieOptions({ name: 'manara_session', secure: true, maxAgeSeconds: 60 });
   assert.equal(cookie.name, '__Host-manara_session');

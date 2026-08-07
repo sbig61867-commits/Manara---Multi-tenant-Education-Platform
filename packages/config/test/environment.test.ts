@@ -49,7 +49,55 @@ test('development and test retain local defaults', () => {
   for (const NODE_ENV of ['development', 'test']) {
     const result = apiEnvSchema.safeParse({ NODE_ENV });
     assert.equal(result.success, true);
-    if (result.success) assert.equal(result.data.API_COOKIE_SECURE, 'auto');
+    if (result.success) {
+      assert.equal(result.data.API_COOKIE_SECURE, 'auto');
+      assert.equal(result.data.API_TRUST_PROXY, false);
+    }
+  }
+});
+
+test('API_TRUST_PROXY accepts disabled aliases and bounded Fastify forms', () => {
+  for (const value of ['off', 'false']) {
+    const result = apiEnvSchema.safeParse({ API_TRUST_PROXY: value });
+    assert.equal(result.success, true);
+    if (result.success) assert.equal(result.data.API_TRUST_PROXY, false);
+  }
+
+  for (const value of ['1', '16']) {
+    const result = apiEnvSchema.safeParse({ API_TRUST_PROXY: value });
+    assert.equal(result.success, true);
+    if (result.success) assert.equal(result.data.API_TRUST_PROXY, Number(value));
+  }
+
+  const allowlist = apiEnvSchema.safeParse({
+    API_TRUST_PROXY: '127.0.0.1, 10.0.0.0/8, ::1, 2001:db8::/32',
+  });
+  assert.equal(allowlist.success, true);
+  if (allowlist.success) {
+    assert.deepEqual(allowlist.data.API_TRUST_PROXY, [
+      '127.0.0.1', '10.0.0.0/8', '::1', '2001:db8::/32',
+    ]);
+  }
+});
+
+test('API_TRUST_PROXY rejects malformed or unbounded values', () => {
+  for (const API_TRUST_PROXY of [
+    '', '0', '-1', '1.5', '17', '*', 'loopback', 'proxy.example.com',
+    '10.0.0.999', '2001:db8:::1', '10.0.0.0/33', '2001:db8::/129',
+    '10.0.0.0/not-a-prefix', '10.0.0.0/8,', '10.0.0.0/8,,192.168.0.0/16',
+  ]) {
+    assert.equal(apiEnvSchema.safeParse({ API_TRUST_PROXY }).success, false, API_TRUST_PROXY);
+  }
+});
+
+test('unrestricted proxy trust is development/test-only', () => {
+  for (const NODE_ENV of ['development', 'test']) {
+    const result = apiEnvSchema.safeParse({ NODE_ENV, API_TRUST_PROXY: 'true' });
+    assert.equal(result.success, true);
+    if (result.success) assert.equal(result.data.API_TRUST_PROXY, true);
+  }
+  for (const NODE_ENV of ['staging', 'production']) {
+    assert.equal(apiEnvSchema.safeParse({ NODE_ENV, API_TRUST_PROXY: 'true' }).success, false);
   }
 });
 
