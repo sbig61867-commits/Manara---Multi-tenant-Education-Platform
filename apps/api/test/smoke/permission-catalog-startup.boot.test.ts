@@ -53,7 +53,7 @@ test('production boot succeeds only after the complete catalog exists', { skip }
   try {
     const unknownKey = 'test:unknown_permission';
     await database.query(
-      "INSERT INTO permissions (id, key, module, description, status) VALUES ($1, $2, 'test', 'Unknown fixture row.', 'inactive') ON CONFLICT (key) DO NOTHING",
+      "INSERT INTO permissions (id, key, module, description, status) VALUES ($1, $2, 'test', 'Unknown fixture row.', 'retired') ON CONFLICT (key) DO UPDATE SET status = 'retired'",
       [randomUUID(), unknownKey],
     );
     const unknownBefore = await database.query<{ id: string; module: string; description: string | null; status: string }>(
