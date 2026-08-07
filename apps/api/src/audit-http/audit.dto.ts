@@ -1,6 +1,7 @@
 import { cursorPaginationSchema } from '@manara/contracts';
 import { z } from 'zod';
 import { tenantIdParamsSchema } from '../tenants/tenant.dto.js';
+import { AUDIT_PERMISSIONS as PLATFORM_AUDIT_PERMISSIONS } from '../authorization/platform-permission-catalog.js';
 
 export { tenantIdParamsSchema };
 export type TenantIdParams = z.infer<typeof tenantIdParamsSchema>;
@@ -20,11 +21,7 @@ export type TenantIdParams = z.infer<typeof tenantIdParamsSchema>;
  *   for both platform audit routes. Platform queries remain structurally
  *   platform-scoped and never downgrade into tenant queries.
  */
-export const AUDIT_PERMISSIONS = {
-  auditList: 'audit:list',
-  auditRead: 'audit:read',
-  auditPlatform: 'audit:platform',
-} as const;
+export const AUDIT_PERMISSIONS = PLATFORM_AUDIT_PERMISSIONS;
 
 export type AuditPermissionKey = (typeof AUDIT_PERMISSIONS)[keyof typeof AUDIT_PERMISSIONS];
 

@@ -1,6 +1,7 @@
 import { cursorPaginationSchema } from '@manara/contracts';
 import { z } from 'zod';
 import { tenantIdParamsSchema } from '../tenants/tenant.dto.js';
+import { ENTITLEMENTS_PERMISSIONS } from '../authorization/platform-permission-catalog.js';
 
 export { tenantIdParamsSchema };
 export type TenantIdParams = z.infer<typeof tenantIdParamsSchema>;
@@ -12,20 +13,7 @@ export type TenantIdParams = z.infer<typeof tenantIdParamsSchema>;
  * documented set this HTTP layer requires. Keys follow the platform-wide
  * `${resourceType}:${action}` convention.
  */
-export const MANAGEMENT_PERMISSIONS = {
-  planList: 'plan:list',
-  planRead: 'plan:read',
-  planVersionList: 'plan:versions',
-  featureList: 'feature:list',
-  entitlementRead: 'entitlement:read',
-  entitlementAssign: 'entitlement:assign',
-  entitlementOverride: 'entitlement:override',
-  entitlementCheck: 'entitlement:check',
-  quotaRead: 'quota:read',
-  quotaReserve: 'quota:reserve',
-  quotaRelease: 'quota:release',
-  usageList: 'usage:list',
-} as const;
+export const MANAGEMENT_PERMISSIONS = ENTITLEMENTS_PERMISSIONS;
 
 export type ManagementPermissionKey = (typeof MANAGEMENT_PERMISSIONS)[keyof typeof MANAGEMENT_PERMISSIONS];
 

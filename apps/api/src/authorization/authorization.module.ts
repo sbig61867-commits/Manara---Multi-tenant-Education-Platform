@@ -4,14 +4,17 @@ import { AlsAuthorizationContextResolver } from './adapters/als-authorization-co
 import { PostgresPermissionRepository } from './adapters/postgres-permission.repository.js';
 import { PostgresRoleAssignmentRepository } from './adapters/postgres-role-assignment.repository.js';
 import { PostgresRoleRepository } from './adapters/postgres-role.repository.js';
+import { PostgresAuthorizationTransactionRunner } from './adapters/postgres-transaction-runner.js';
 import { AuthorizationDecisionService } from './application/authorization-decision.service.js';
 import { DefaultAbacPolicy } from './application/default-abac.policy.js';
 import { DefaultRbacPolicy } from './application/default-rbac.policy.js';
 import { RoleAssignmentService } from './application/role-assignment.service.js';
 import { RoleManagementService } from './application/role-management.service.js';
+import { PermissionCatalogService } from './application/permission-catalog.service.js';
 import { NoopAuthorizationEventPublisher } from './domain/events.js';
 import {
   ABAC_POLICY,
+  AUTHORIZATION_TRANSACTION_RUNNER,
   AUTHORIZATION_CONTEXT_RESOLVER,
   AUTHORIZATION_EVENT_PUBLISHER,
   PERMISSION_REPOSITORY,
@@ -25,11 +28,12 @@ import {
     RoleManagementService,
     RoleAssignmentService,
     AuthorizationDecisionService,
+    PermissionCatalogService,
     { provide: RBAC_POLICY, useClass: DefaultRbacPolicy },
     { provide: ABAC_POLICY, useClass: DefaultAbacPolicy },
     { provide: AUTHORIZATION_EVENT_PUBLISHER, useClass: NoopAuthorizationEventPublisher },
   ],
-  exports: [RoleManagementService, RoleAssignmentService, AuthorizationDecisionService],
+  exports: [RoleManagementService, RoleAssignmentService, AuthorizationDecisionService, PermissionCatalogService],
 })
 export class AuthorizationModule {
   static forRoot(database: PostgresDatabase | null): DynamicModule {
@@ -41,6 +45,10 @@ export class AuthorizationModule {
       providers: [
         { provide: ROLE_REPOSITORY, useValue: new PostgresRoleRepository(database) },
         { provide: PERMISSION_REPOSITORY, useValue: new PostgresPermissionRepository(database) },
+        {
+          provide: AUTHORIZATION_TRANSACTION_RUNNER,
+          useValue: new PostgresAuthorizationTransactionRunner(database),
+        },
         {
           provide: ROLE_ASSIGNMENT_REPOSITORY,
           useValue: new PostgresRoleAssignmentRepository(database),

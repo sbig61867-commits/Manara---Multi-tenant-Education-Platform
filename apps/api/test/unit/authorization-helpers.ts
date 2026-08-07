@@ -14,6 +14,7 @@ import type {
 } from '../../src/authorization/domain/types.js';
 import type { AuthorizationContextResolver } from '../../src/authorization/ports/authorization-context.js';
 import type { PermissionRepository } from '../../src/authorization/ports/permission.repository.js';
+import type { PlatformPermissionDescriptor } from '../../src/authorization/platform-permission-catalog.js';
 import type { RoleAssignmentRepository } from '../../src/authorization/ports/role-assignment.repository.js';
 import type { RoleRepository } from '../../src/authorization/ports/role.repository.js';
 
@@ -101,6 +102,35 @@ export class FakePermissionRepository implements PermissionRepository {
 
   async findByKey(key: string): Promise<Permission | null> {
     return this.permissions.get(key) ?? null;
+  }
+
+  async findByKeys(keys: readonly string[]): Promise<Permission[]> {
+    return keys.map((key) => this.permissions.get(key)).filter((permission) => permission !== undefined);
+  }
+
+  async insertCatalogPermission(permission: Permission): Promise<boolean> {
+    if (this.permissions.has(permission.key)) {
+      return false;
+    }
+    this.permissions.set(permission.key, permission);
+    return true;
+  }
+
+  async reconcileCatalogMetadata(descriptor: PlatformPermissionDescriptor, updatedAt: Date): Promise<boolean> {
+    const permission = this.permissions.get(descriptor.key);
+    if (
+      permission === undefined ||
+      (permission.module === descriptor.module && permission.description === descriptor.description)
+    ) {
+      return false;
+    }
+    this.permissions.set(descriptor.key, {
+      ...permission,
+      module: descriptor.module,
+      description: descriptor.description,
+      updatedAt,
+    });
+    return true;
   }
 
   async list(options: { limit: number; cursor: string | null; module?: string | null }): Promise<Permission[]> {
