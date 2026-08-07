@@ -19,6 +19,7 @@ export interface MigrationRunnerOptions {
   migrationsDir: string;
   table?: string;
   logger?: DatabaseLogger;
+  shouldContinue?: () => boolean;
 }
 
 const MIGRATION_FILENAME_PATTERN = /^(\d+)_([a-z0-9_]+)\.sql$/;
@@ -94,6 +95,9 @@ export class MigrationRunner {
     }
     const applied: MigrationFile[] = [];
     for (const migration of pending) {
+      if (this.options.shouldContinue?.() === false) {
+        throw new Error('Migration execution interrupted');
+      }
       const sql = await readFile(join(this.options.migrationsDir, migration.filename), 'utf8');
       const didApply = await this.database.withTransaction(async (tx) => {
         await tx.query(`SELECT pg_advisory_xact_lock(${MIGRATION_ADVISORY_LOCK_KEY})`);
@@ -120,8 +124,11 @@ export class MigrationRunner {
   }
 
   private async ensureLedgerTable(): Promise<void> {
-    await this.database.query(
-      `CREATE TABLE IF NOT EXISTS ${this.tableName} (version text PRIMARY KEY, name text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`,
-    );
+    await this.database.withTransaction(async (tx) => {
+      await tx.query(`SELECT pg_advisory_xact_lock(${MIGRATION_ADVISORY_LOCK_KEY})`);
+      await tx.query(
+        `CREATE TABLE IF NOT EXISTS ${this.tableName} (version text PRIMARY KEY, name text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`,
+      );
+    });
   }
 }

@@ -14,6 +14,7 @@
   "packageManager": "npm@11.13.0",
   "scripts": {
     "build": "turbo run build",
+    "db:migrate": "npm run migrate --workspace @manara/database",
     "dev": "turbo run dev",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
