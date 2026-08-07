@@ -8,6 +8,7 @@
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
+    "permissions:seed": "node dist/authorization/permission-catalog.cli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "npm run test:unit && npm run test:smoke && npm run test:integration",
