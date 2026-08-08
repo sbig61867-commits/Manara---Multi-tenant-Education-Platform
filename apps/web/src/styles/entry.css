@@ -68,6 +68,10 @@
   color: var(--action);
 }
 
+html:lang(ar) .entry-hero__title {
+  line-height: var(--leading-heading);
+}
+
 html:lang(ar) .entry-hero__lead,
 html:lang(ar) .entry-hero__trust {
   line-height: var(--leading-arabic);

@@ -82,6 +82,16 @@ test('entry styles use semantic tokens, logical properties, and no raw palette',
   assert.match(css, /var\(--canvas\)|var\(--surface\)/);
 });
 
+test('Arabic display text gets a comfortable line-height for wrapped Naskh headings', () => {
+  const css = readFileSync(new URL('../src/styles/entry.css', import.meta.url), 'utf8');
+  assert.match(css, /html:lang\(ar\) \.entry-hero__title\s*\{[^}]*line-height:\s*var\(--leading-heading\)/);
+});
+
+test('the primary CTA meets the 44px touch target via the control-height token', () => {
+  const css = readFileSync(new URL('../src/styles/components.css', import.meta.url), 'utf8');
+  assert.match(css, /\.ui-button\s*\{[^}]*min-height:\s*var\(--control-height\)/);
+});
+
 test('entry motion uses existing tokens and is one-shot (no continuous animation)', () => {
   const css = readFileSync(new URL('../src/styles/entry.css', import.meta.url), 'utf8');
   assert.match(css, /var\(--motion-instant\)|var\(--motion-fast\)|var\(--motion-base\)|var\(--motion-reveal\)/);
