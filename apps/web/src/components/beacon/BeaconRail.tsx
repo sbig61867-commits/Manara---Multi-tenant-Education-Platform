@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import React, { type HTMLAttributes, type ReactNode } from 'react';
 
 export type BeaconRailPurpose = 'hierarchy' | 'progress' | 'relationship';
 

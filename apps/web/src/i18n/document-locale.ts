@@ -2,7 +2,7 @@ export const SUPPORTED_LOCALES = ['ar', 'en'] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 export type DocumentDirection = 'rtl' | 'ltr';
 
-export const DEFAULT_LOCALE: SupportedLocale = 'ar';
+export const DEFAULT_LOCALE: SupportedLocale = 'en';
 
 interface DocumentRoot {
   dir: string;
@@ -21,7 +21,7 @@ export const DOCUMENT_TITLES: Readonly<Record<SupportedLocale, string>> = {
 
 export function normalizeLocale(value: string | null | undefined): SupportedLocale {
   const language = value?.trim().toLowerCase().split(/[-_]/, 1)[0];
-  return language === 'en' ? 'en' : DEFAULT_LOCALE;
+  return language === 'ar' ? 'ar' : DEFAULT_LOCALE;
 }
 
 export function directionForLocale(locale: SupportedLocale): DocumentDirection {

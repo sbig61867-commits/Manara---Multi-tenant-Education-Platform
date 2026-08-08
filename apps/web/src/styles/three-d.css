@@ -1,0 +1,274 @@
+/* ==========================================================================
+   Manara 3D visual library — code-drawn depth, iso panels, floating layers.
+   Pure CSS 3D transforms + SVG; no external assets. Reduced-motion safe.
+   ========================================================================== */
+
+/* ---- Shared stage ---- */
+.scene3d {
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+/* Depth lift — a card that rises in 3D perspective */
+.lift3d {
+  transform: translateZ(var(--depth, 24px));
+  transition: transform var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
+}
+
+.lift3d:hover {
+  transform: translateZ(calc(var(--depth, 24px) + 12px));
+}
+
+/* Floating layer: gentle parallax bob, motion-safe */
+@keyframes float3d {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.float3d {
+  animation: float3d 6s var(--ease-standard) infinite;
+}
+
+.float3d--slow { animation-duration: 9s; }
+.float3d--reverse { animation-direction: reverse; }
+
+/* ---- Isometric panel (drawn with borders/gradients) ---- */
+.iso {
+  position: relative;
+  background: var(--surface-strong);
+  border: var(--border-width) solid var(--border-strong);
+  box-shadow:
+    -6px 6px 0 var(--foundation-200),
+    -12px 12px 0 var(--foundation-100),
+    0 18px 30px rgb(0 0 0 / 0.18);
+  transition: transform var(--motion-base) var(--ease-standard);
+}
+
+.iso:hover {
+  transform: translate3d(2px, -2px, 0);
+}
+
+.iso--dark {
+  background: var(--foundation-800);
+  border-color: var(--foundation-600);
+  box-shadow:
+    -6px 6px 0 var(--foundation-700),
+    -12px 12px 0 var(--foundation-900),
+    0 18px 30px rgb(0 0 0 / 0.4);
+}
+
+/* ---- Code-drawn 3D shapes ---- */
+.shape3d {
+  position: relative;
+  display: inline-block;
+  width: 3.5rem;
+  height: 3.5rem;
+  transform-style: preserve-3d;
+  transform: rotateX(-24deg) rotateY(34deg);
+}
+
+.shape3d__face {
+  position: absolute;
+  inset: 0;
+  border: var(--border-width) solid var(--foundation-500);
+  background: rgb(23 103 91 / 0.85);
+}
+
+.shape3d__face--top {
+  background: var(--consequence-400);
+  border-color: var(--consequence-300);
+  transform: rotateX(90deg) translateZ(1.75rem);
+}
+
+.shape3d__face--right {
+  background: var(--foundation-700);
+  border-color: var(--foundation-600);
+  transform: rotateY(90deg) translateZ(1.75rem);
+}
+
+/* ---- Layered depth stack (for hero/product accents) ---- */
+.stack3d {
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.stack3d__layer {
+  position: absolute;
+  inset: 0;
+  border: var(--border-width) solid var(--foundation-700);
+  border-radius: var(--radius-md);
+  background: rgb(12 58 51 / 0.55);
+  backdrop-filter: blur(10px);
+}
+
+.stack3d__layer--1 { transform: translateZ(0); }
+.stack3d__layer--2 { transform: translateZ(18px); }
+.stack3d__layer--3 { transform: translateZ(36px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .float3d,
+  .float3d--slow,
+  .float3d--reverse {
+    animation: none;
+  }
+
+  .lift3d,
+  .lift3d:hover,
+  .iso,
+  .iso:hover,
+  .shape3d {
+    transform: none !important;
+    box-shadow: none !important;
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   Product workspaces (student / educator / institution / platform)
+   ========================================================================== */
+
+.ws {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.ws__head {
+  max-width: 56rem;
+}
+
+.ws__eyebrow {
+  margin: 0 0 var(--space-3);
+  color: var(--memory-600);
+  font-size: var(--text-body);
+  font-weight: 700;
+}
+
+.ws__head h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font: 700 clamp(2rem, 3.5vw, 3rem) / var(--leading-heading) var(--font-display);
+}
+
+.ws__lead {
+  max-width: 64ch;
+  margin-block-start: var(--space-3);
+  color: var(--text);
+  font-size: var(--text-body-lg);
+}
+
+.ws__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.ws-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.ws-card h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-h2);
+}
+
+.ws-course-list {
+  display: grid;
+  gap: var(--space-4);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.ws-course {
+  display: grid;
+  gap: var(--space-2);
+  padding-block-end: var(--space-4);
+  border-block-end: var(--border-width) solid var(--border-subtle);
+}
+
+.ws-course:last-child {
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+.ws-course__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ws-course__title {
+  color: var(--text-strong);
+  font-size: var(--text-body-lg);
+  font-weight: 700;
+}
+
+.ws-course__sep {
+  color: var(--border-strong);
+  font-weight: 400;
+}
+
+.ws-course__pct {
+  color: var(--action);
+  font: 700 var(--text-h3) / 1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-course__track {
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--surface-muted);
+}
+
+.ws-course__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--foundation-600), var(--consequence-500));
+}
+
+.ws-course__next {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-body);
+}
+
+.ws-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.ws-stat {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.ws-stat__value {
+  color: var(--foundation-700);
+  font: 700 var(--text-h1) / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-stat__label {
+  color: var(--text);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+.ws .shape3d {
+  justify-self: start;
+}

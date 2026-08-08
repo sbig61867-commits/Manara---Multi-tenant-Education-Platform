@@ -11,9 +11,15 @@ export interface ProductNavigation {
   readonly items: readonly NavigationItem[];
 }
 
-export const publicNavigation: readonly NavigationItem[] = [
-  { label: 'Home / الرئيسية', shortLabel: 'Home', to: '/' },
-  { label: 'About / عن منارة', shortLabel: 'About', to: '/about' },
+export interface PublicNavigationItem {
+  readonly label: Readonly<Record<'ar' | 'en', string>>;
+  readonly to: string;
+}
+
+export const publicNavigation: readonly PublicNavigationItem[] = [
+  { label: { ar: 'المنصة', en: 'Platform' }, to: '/#capabilities' },
+  { label: { ar: 'كيف تعمل', en: 'How it works' }, to: '/#workflow' },
+  { label: { ar: 'الحوكمة', en: 'Governance' }, to: '/#governance' },
 ];
 
 export const productNavigation: Readonly<Record<ProductRole, ProductNavigation>> = {
