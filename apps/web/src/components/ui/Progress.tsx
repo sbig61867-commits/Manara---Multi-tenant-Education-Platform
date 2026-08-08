@@ -1,4 +1,4 @@
-import React, { useId, type ProgressHTMLAttributes, type ReactNode } from 'react';
+import { useId, type ProgressHTMLAttributes, type ReactNode } from 'react';
 
 export interface ProgressProps extends Omit<ProgressHTMLAttributes<HTMLProgressElement>, 'children'> {
   readonly label: ReactNode;
