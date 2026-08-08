@@ -81,3 +81,27 @@ test('entry styles use semantic tokens, logical properties, and no raw palette',
   assert.match(css, /margin-inline|inset-inline|padding-inline/);
   assert.match(css, /var\(--canvas\)|var\(--surface\)/);
 });
+
+test('entry motion uses existing tokens and is one-shot (no continuous animation)', () => {
+  const css = readFileSync(new URL('../src/styles/entry.css', import.meta.url), 'utf8');
+  assert.match(css, /var\(--motion-instant\)|var\(--motion-fast\)|var\(--motion-base\)|var\(--motion-reveal\)/);
+  assert.match(css, /var\(--ease-enter\)|var\(--ease-standard\)/);
+  assert.doesNotMatch(css, /infinite/i);
+  assert.doesNotMatch(css, /animation-iteration-count/i);
+  assert.doesNotMatch(css, /translateX\(/);
+});
+
+test('entry motion is disabled immediately under reduced motion', () => {
+  const css = readFileSync(new URL('../src/styles/entry.css', import.meta.url), 'utf8');
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(css, /animation:\s*none/);
+  assert.match(css, /opacity:\s*1/);
+});
+
+test('no animation library or motion framework dependency is used', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const all = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+  for (const name of ['framer-motion', 'motion', 'gsap', 'react-spring', 'animejs', 'motion-one']) {
+    assert.equal(name in all, false, `${name} must not be a dependency`);
+  }
+});

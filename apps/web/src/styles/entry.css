@@ -73,6 +73,71 @@ html:lang(ar) .entry-hero__trust {
   line-height: var(--leading-arabic);
 }
 
+/* UX-3: restrained one-shot entrance. Opacity + a small vertical rise only; settles still. */
+@keyframes entry-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes beacon-node-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.entry-hero__title {
+  animation: entry-rise var(--motion-reveal) var(--ease-enter) both;
+}
+
+.entry-hero__lead {
+  animation: entry-rise var(--motion-slow) var(--ease-enter) both;
+  animation-delay: var(--motion-instant);
+}
+
+.entry-hero__actions {
+  animation: entry-rise var(--motion-slow) var(--ease-enter) both;
+  animation-delay: var(--motion-base);
+}
+
+.entry-hero__beacon {
+  animation: entry-rise var(--motion-slow) var(--ease-enter) both;
+  animation-delay: var(--motion-slow);
+}
+
+.entry-hero__beacon .beacon-node {
+  animation: beacon-node-in var(--motion-base) var(--ease-standard) both;
+}
+
+.entry-hero__beacon .beacon-node:nth-child(2) {
+  animation-delay: var(--motion-instant);
+}
+
+.entry-hero__beacon .beacon-node:nth-child(3) {
+  animation-delay: var(--motion-base);
+}
+
+/* Reduced motion: content visible immediately, no entrance delays. */
+@media (prefers-reduced-motion: reduce) {
+  .entry-hero__title,
+  .entry-hero__lead,
+  .entry-hero__actions,
+  .entry-hero__beacon,
+  .entry-hero__beacon .beacon-node {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .entry-footer {
   display: flex;
   min-height: 4rem;
