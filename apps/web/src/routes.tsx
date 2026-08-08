@@ -1,6 +1,7 @@
 import React from 'react';
 import { Route, Routes } from 'react-router';
 import { ProductLayout } from './layouts/ProductLayout';
+import { EntryPage } from './pages/entry/EntryPage';
 import type { ProductRole } from './components/navigation/navigation-config';
 
 interface ShellPageProps {
@@ -32,7 +33,7 @@ const roleRoutes: ReadonlyArray<{ path: string; role: ProductRole; title: string
 export function AppRoutes() {
   return (
     <Routes>
-      <Route index element={<EmptyPage />} />
+      <Route index element={<EntryPage />} />
       {roleRoutes.map(({ path, role, title }) => (
         <Route key={role} path={path} element={<ProductLayout role={role} />}>
           <Route index element={<ShellPage eyebrow="Workspace" title={title} />} />

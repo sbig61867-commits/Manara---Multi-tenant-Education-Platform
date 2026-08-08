@@ -1,0 +1,91 @@
+.entry-page {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+.entry-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  min-height: 4.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding-inline: clamp(var(--space-4), 4vw, var(--space-12));
+  border-block-end: var(--border-width) solid var(--border-subtle);
+  background: var(--canvas);
+}
+
+.entry-main {
+  width: min(100% - (2 * var(--space-6)), var(--content-reading));
+  margin-inline: auto;
+  flex: 1 0 auto;
+  padding-block: clamp(var(--space-12), 10vh, var(--space-24)) var(--space-12);
+}
+
+.entry-hero {
+  display: grid;
+  gap: var(--space-6);
+  align-content: start;
+}
+
+.entry-hero__title {
+  margin: 0;
+  color: var(--text-strong);
+  font: 700 var(--text-display) / var(--leading-display) var(--font-display);
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.entry-hero__lead {
+  max-width: var(--content-reading);
+  margin: 0;
+  color: var(--text);
+  font: 400 var(--text-body-lg) / var(--leading-body) var(--font-ui);
+}
+
+.entry-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-block-start: var(--space-4);
+}
+
+.entry-hero__beacon {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-block-start: var(--space-16);
+  color: var(--action);
+}
+
+.entry-footer {
+  display: flex;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: center;
+  padding-inline: clamp(var(--space-4), 4vw, var(--space-12));
+  border-block-start: var(--border-width) solid var(--border-subtle);
+  background: var(--surface-muted);
+}
+
+.entry-footer__note {
+  margin: 0;
+  color: var(--text-muted);
+  font: 500 var(--text-caption) / var(--leading-body) var(--font-ui);
+  text-align: center;
+}
+
+@media (max-width: 47.99rem) {
+  .entry-main {
+    width: calc(100% - (2 * var(--space-4)));
+    padding-block: var(--space-12) var(--space-8);
+  }
+
+  .entry-hero__beacon {
+    margin-block-start: var(--space-12);
+    gap: var(--space-4);
+  }
+}
