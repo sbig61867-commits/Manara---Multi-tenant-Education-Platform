@@ -5,18 +5,11 @@ import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router';
 import { AppRoutes } from '../src/routes.js';
-import { productNavigation, publicNavigation } from '../src/components/navigation/navigation-config.js';
+import { productNavigation } from '../src/components/navigation/navigation-config.js';
 
 function renderRoute(path: string) {
   return renderToStaticMarkup(h(MemoryRouter, { initialEntries: [path] }, h(AppRoutes)));
 }
-
-test('public routes render the public shell and stable main landmark', () => {
-  const html = renderRoute('/about');
-  assert.match(html, /aria-label="Public navigation/);
-  assert.match(html, /<main class="public-main" id="main-content"/);
-  assert.match(html, /aria-current="page"/);
-});
 
 test('each supported product role renders role-specific navigation without authorization claims', () => {
   for (const [role, navigation] of Object.entries(productNavigation)) {
@@ -27,8 +20,7 @@ test('each supported product role renders role-specific navigation without autho
   }
 });
 
-test('navigation configurations cover public and four approved product contexts', () => {
-  assert.equal(publicNavigation.length, 2);
+test('navigation configurations cover four approved product contexts', () => {
   assert.deepEqual(Object.keys(productNavigation).sort(), [
     'institution-admin',
     'student',
