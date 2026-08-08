@@ -21,10 +21,10 @@ export function EntryHero({ onPrimaryAction }: EntryHeroProps) {
       </h1>
       <p className="entry-hero__lead" dir="auto">
         <span className="locale-copy" data-locale="ar" lang="ar">
-          نواة واحدة مرنة، قابلة للتخصيص لكل مؤسسة، بأمان وعزل كاملين.
+          نواة واحدة مرنة تتكيف مع نماذج كل مؤسسة ومصطلحاتها وطريقة عملها.
         </span>
         <span className="locale-copy" data-locale="en" lang="en">
-          One flexible core, configurable for every institution, with full security and isolation.
+          A single flexible core that adapts to each institution's models, terminology, and way of working.
         </span>
       </p>
       <div className="entry-hero__actions">
@@ -33,6 +33,14 @@ export function EntryHero({ onPrimaryAction }: EntryHeroProps) {
           <span className="locale-copy" data-locale="en" lang="en">Request access</span>
         </Button>
       </div>
+      <p className="entry-hero__trust" dir="auto">
+        <span className="locale-copy" data-locale="ar" lang="ar">
+          عزل كامل للبيانات بين المؤسسات، وصلاحيات دقيقة، وسجلات تدقيق.
+        </span>
+        <span className="locale-copy" data-locale="en" lang="en">
+          Full data isolation between institutions, granular permissions, and audit records.
+        </span>
+      </p>
       <div className="entry-hero__beacon" aria-hidden="true">
         <BeaconRail orientation="horizontal" purpose="progress">
           <BeaconNode meaning="checkpoint" state="complete" />

@@ -27,12 +27,12 @@
 
 .entry-hero {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-4);
   align-content: start;
 }
 
 .entry-hero__title {
-  margin: 0;
+  margin: 0 0 var(--space-2);
   color: var(--text-strong);
   font: 700 var(--text-display) / var(--leading-display) var(--font-display);
   letter-spacing: 0;
@@ -50,7 +50,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  margin-block-start: var(--space-4);
+  margin-block-start: var(--space-6);
+}
+
+.entry-hero__trust {
+  max-width: var(--content-reading);
+  margin: 0;
+  color: var(--text-muted);
+  font: 400 var(--text-body) / var(--leading-body) var(--font-ui);
 }
 
 .entry-hero__beacon {
@@ -59,6 +66,11 @@
   gap: var(--space-6);
   margin-block-start: var(--space-16);
   color: var(--action);
+}
+
+html:lang(ar) .entry-hero__lead,
+html:lang(ar) .entry-hero__trust {
+  line-height: var(--leading-arabic);
 }
 
 .entry-footer {

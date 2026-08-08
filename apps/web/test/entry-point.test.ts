@@ -34,6 +34,30 @@ test('the entry point exposes no Home/About navigation or product shell', () => 
   assert.doesNotMatch(html, /aria-label="[^"]*navigation/);
 });
 
+test('hero copy communicates what Manara is and its differentiator in both locales', () => {
+  const html = renderRoute('/');
+  assert.match(html, /منصة سحابية متعددة المؤسسات لإدارة التعليم والتدريب/);
+  assert.match(html, /A multi-tenant cloud platform/);
+  assert.match(html, /نواة واحدة مرنة تتكيف/);
+  assert.match(html, /A single flexible core/);
+});
+
+test('the trust signal is a single restrained supporting line in both locales', () => {
+  const html = renderRoute('/');
+  assert.match(html, /عزل كامل للبيانات بين المؤسسات/);
+  assert.match(html, /Full data isolation between institutions/);
+  const trustCount = (html.match(/data-locale="ar" lang="ar">عزل/gi) ?? []).length;
+  assert.equal(trustCount, 1);
+});
+
+test('locale copy is balanced and never duplicated between languages', () => {
+  const html = renderRoute('/');
+  const ar = (html.match(/data-locale="ar" lang="ar">/g) ?? []).length;
+  const en = (html.match(/data-locale="en" lang="en">/g) ?? []).length;
+  assert.ok(ar >= 1);
+  assert.equal(en, ar);
+});
+
 test('beacon decorative elements are hidden from assistive technology', () => {
   const html = renderRoute('/');
   assert.match(html, /aria-hidden="true"/);
