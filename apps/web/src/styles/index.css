@@ -1,6 +1,8 @@
 @import './tokens.css';
 @import './components.css';
 @import './layouts.css';
+@import './public.css';
+@import './three-d.css';
 
 @tailwind base;
 @tailwind components;

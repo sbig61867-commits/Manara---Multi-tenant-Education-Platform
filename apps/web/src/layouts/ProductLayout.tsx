@@ -3,7 +3,9 @@ import { Outlet } from 'react-router';
 import { Breadcrumbs } from '../components/navigation/Breadcrumbs';
 import { MobileNavigation } from '../components/navigation/MobileNavigation';
 import { NavigationList } from '../components/navigation/NavigationList';
+import { ThemeToggle } from '../components/navigation/ThemeToggle';
 import { productNavigation, type ProductRole } from '../components/navigation/navigation-config';
+import { ManaraLogo3D } from '../components/navigation/ManaraLogo3D';
 
 interface ProductLayoutProps {
   readonly role: ProductRole;
@@ -16,6 +18,7 @@ export function ProductLayout({ role }: ProductLayoutProps) {
     <div className="product-layout" data-role={role}>
       <aside className="product-sidebar">
         <a className="shell-identity" href="/">
+          <ManaraLogo3D size="sm" />
           <span className="shell-identity__wordmark" data-locale="ar" lang="ar">منارة</span>
           <span className="shell-identity__wordmark" data-locale="en" lang="en">Manara</span>
         </a>
@@ -28,6 +31,7 @@ export function ProductLayout({ role }: ProductLayoutProps) {
         <header className="product-topbar">
           <MobileNavigation items={navigation.items} label={navigation.label} />
           <p dir="auto">{navigation.label}</p>
+          <ThemeToggle />
         </header>
         <div className="product-page-region">
           <Breadcrumbs items={navigation.items} />
