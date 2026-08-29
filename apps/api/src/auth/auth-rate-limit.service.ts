@@ -10,16 +10,6 @@ import {
 import { boundedIdentifierHash, normalizeClientIp } from './in-memory-auth-rate-limiter.js';
 import type { AuthRateLimiterPort, RateLimitDecision } from './rate-limit.types.js';
 
-/**
- * Composes the per-endpoint authentication rate-limit policies behind the
- * replaceable `AuthRateLimiterPort`.
- *
- * Login uses two independent limiters: one per normalized client IP and one
- * per normalized email + client IP. Checks are non-consuming; failed
- * credentials consume both, and a successful login resets only the email+IP
- * counter (the broader IP limiter is never reset by success). Blocked
- * responses carry no account-existence information.
- */
 @Injectable()
 export class AuthRateLimitService {
   constructor(
@@ -29,8 +19,20 @@ export class AuthRateLimitService {
     @Inject(AUTH_ENDPOINT_IP_LIMITER) private readonly endpointIp: AuthRateLimiterPort,
   ) {}
 
+  private static loginIpKey(ip: string | null): string {
+    return `login_ip\u0000${normalizeClientIp(ip)}`;
+  }
+
   private static emailIpKey(email: string, ip: string | null): string {
-    return `${normalizeEmail(email)}\u0000${normalizeClientIp(ip)}`;
+    return `login_email_ip\u0000${normalizeEmail(email)}\u0000${normalizeClientIp(ip)}`;
+  }
+
+  private static refreshIpKey(ip: string | null): string {
+    return `refresh_ip\u0000${normalizeClientIp(ip)}`;
+  }
+
+  private static endpointIpKey(ip: string | null): string {
+    return `endpoint_ip\u0000${normalizeClientIp(ip)}`;
   }
 
   private static throwBlocked(policy: string, decision: RateLimitDecision, key: string | null): never {
@@ -41,42 +43,36 @@ export class AuthRateLimitService {
     });
   }
 
-  guardLogin(ip: string | null, email: string): void {
-    const normalizedIp = normalizeClientIp(ip);
-    const ipDecision = this.loginIp.check(normalizedIp);
-    if (!ipDecision.allowed) {
-      AuthRateLimitService.throwBlocked('login_ip', ipDecision, null);
-    }
-    const emailIpDecision = this.loginEmailIp.check(AuthRateLimitService.emailIpKey(email, ip));
-    if (!emailIpDecision.allowed) {
-      AuthRateLimitService.throwBlocked('login_email_ip', emailIpDecision, AuthRateLimitService.emailIpKey(email, ip));
-    }
+  async guardLogin(ip: string | null, email: string): Promise<void> {
+    const ipKey = AuthRateLimitService.loginIpKey(ip);
+    const emailIpKey = AuthRateLimitService.emailIpKey(email, ip);
+    const ipDecision = await this.loginIp.check(ipKey);
+    if (!ipDecision.allowed) AuthRateLimitService.throwBlocked('login_ip', ipDecision, null);
+    const emailIpDecision = await this.loginEmailIp.check(emailIpKey);
+    if (!emailIpDecision.allowed) AuthRateLimitService.throwBlocked('login_email_ip', emailIpDecision, emailIpKey);
   }
 
-  recordLoginFailure(ip: string | null, email: string): void {
-    this.loginIp.consume(normalizeClientIp(ip));
-    this.loginEmailIp.consume(AuthRateLimitService.emailIpKey(email, ip));
+  async recordLoginFailure(ip: string | null, email: string): Promise<void> {
+    await this.loginIp.consume(AuthRateLimitService.loginIpKey(ip));
+    await this.loginEmailIp.consume(AuthRateLimitService.emailIpKey(email, ip));
   }
 
-  resetLoginFailures(ip: string | null, email: string): void {
-    this.loginEmailIp.reset(AuthRateLimitService.emailIpKey(email, ip));
+  async resetLoginFailures(ip: string | null, email: string): Promise<void> {
+    await this.loginEmailIp.reset(AuthRateLimitService.emailIpKey(email, ip));
   }
 
-  guardRefresh(ip: string | null): void {
-    const decision = this.refreshIp.check(normalizeClientIp(ip));
-    if (!decision.allowed) {
-      AuthRateLimitService.throwBlocked('refresh_ip', decision, null);
-    }
+  async guardRefresh(ip: string | null): Promise<void> {
+    const decision = await this.refreshIp.check(AuthRateLimitService.refreshIpKey(ip));
+    if (!decision.allowed) AuthRateLimitService.throwBlocked('refresh_ip', decision, null);
   }
 
-  recordRefreshFailure(ip: string | null): void {
-    this.refreshIp.consume(normalizeClientIp(ip));
+  async recordRefreshFailure(ip: string | null): Promise<void> {
+    await this.refreshIp.consume(AuthRateLimitService.refreshIpKey(ip));
   }
 
-  guardEndpoint(ip: string | null): void {
-    const decision = this.endpointIp.consume(normalizeClientIp(ip));
-    if (!decision.allowed) {
-      AuthRateLimitService.throwBlocked('endpoint_ip', decision, null);
-    }
+  async guardEndpoint(ip: string | null): Promise<void> {
+    const key = AuthRateLimitService.endpointIpKey(ip);
+    const decision = await this.endpointIp.consume(key);
+    if (!decision.allowed) AuthRateLimitService.throwBlocked('endpoint_ip', decision, null);
   }
 }
