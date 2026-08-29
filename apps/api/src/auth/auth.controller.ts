@@ -1,24 +1,7 @@
 import {
-  ApiBadRequestResponse,
-  ApiNoContentResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-  ApiUnauthorizedResponse,
+  ApiBadRequestResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiResponse, ApiTags, ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Inject,
-  Post,
-  Req,
-  Res,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { authSessionSchema, type AuthSessionView, userSummarySchema, type UserSummary } from '@manara/contracts';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { SessionCookieOptions } from '../http/cookie-options.js';
@@ -29,53 +12,23 @@ import { SessionService } from '../identity/application/session.service.js';
 import { InvalidCredentialsError } from '../identity/domain/errors.js';
 import type { AuthSession, User } from '../identity/domain/types.js';
 import { AuthRateLimitService } from './auth-rate-limit.service.js';
-import {
-  LOGIN_RESPONSE_OPENAPI,
-  SESSION_RESPONSE_OPENAPI,
-  loginBodySchema,
-  loginResponseSchema,
-  sessionResponseSchema,
-  type LoginBody,
-  type LoginResponse,
-  type SessionResponse,
-} from './auth.dto.js';
+import { LOGIN_RESPONSE_OPENAPI, SESSION_RESPONSE_OPENAPI, loginBodySchema, loginResponseSchema, sessionResponseSchema, type LoginBody, type LoginResponse, type SessionResponse } from './auth.dto.js';
 import { SESSION_COOKIE } from './auth.tokens.js';
 
 const RATE_LIMITED_RESPONSE = {
   status: HttpStatus.TOO_MANY_REQUESTS,
   description: 'Too many requests; retry after the Retry-After header',
-  headers: {
-    'Retry-After': {
-      description: 'Seconds to wait before retrying',
-      schema: { type: 'integer' },
-    },
-  },
+  headers: { 'Retry-After': { description: 'Seconds to wait before retrying', schema: { type: 'integer' } } },
 };
 
 function toSessionView(session: AuthSession): AuthSessionView {
-  return authSessionSchema.parse({
-    id: session.id,
-    userId: session.userId,
-    createdAt: session.createdAt.toISOString(),
-    expiresAt: session.expiresAt.toISOString(),
-    idleExpiresAt: session.idleExpiresAt.toISOString(),
-  });
+  return authSessionSchema.parse({ id: session.id, userId: session.userId, createdAt: session.createdAt.toISOString(), expiresAt: session.expiresAt.toISOString(), idleExpiresAt: session.idleExpiresAt.toISOString() });
 }
 
 function toUserSummary(user: User): UserSummary {
-  return userSummarySchema.parse({
-    id: user.id,
-    email: user.email,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt.toISOString(),
-  });
+  return userSummarySchema.parse({ id: user.id, email: user.email, createdAt: user.createdAt.toISOString(), updatedAt: user.updatedAt.toISOString() });
 }
 
-/**
- * Thin HTTP layer over the identity application services. All business rules
- * live in `IdentityModule`; this controller only maps requests/responses,
- * manages the session cookie, and translates domain errors to HTTP errors.
- */
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -87,14 +40,8 @@ export class AuthController {
     @Inject(AuthRateLimitService) private readonly rateLimits: AuthRateLimitService,
   ) {}
 
-  private setSessionCookie(reply: FastifyReply, token: string): void {
-    reply.setCookie(this.sessionCookie.name, token, this.sessionCookie.options);
-  }
-
-  private clearSessionCookie(reply: FastifyReply): void {
-    reply.clearCookie(this.sessionCookie.name, this.sessionCookie.options);
-  }
-
+  private setSessionCookie(reply: FastifyReply, token: string): void { reply.setCookie(this.sessionCookie.name, token, this.sessionCookie.options); }
+  private clearSessionCookie(reply: FastifyReply): void { reply.clearCookie(this.sessionCookie.name, this.sessionCookie.options); }
   private sessionToken(request: FastifyRequest): string | null {
     const token = request.cookies[this.sessionCookie.name];
     return typeof token === 'string' && token !== '' ? token : null;
@@ -109,18 +56,17 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
   @ApiResponse(RATE_LIMITED_RESPONSE)
   async login(@Body() body: LoginBody, @Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): Promise<LoginResponse> {
-    this.rateLimits.guardLogin(request.ip, body.email);
+    await this.rateLimits.guardLogin(request.ip, body.email);
     let user: User;
-    try {
-      user = await this.credentials.authenticate(body.email, body.password);
-    } catch (error) {
+    try { user = await this.credentials.authenticate(body.email, body.password); }
+    catch (error) {
       if (error instanceof InvalidCredentialsError) {
-        this.rateLimits.recordLoginFailure(request.ip, body.email);
+        await this.rateLimits.recordLoginFailure(request.ip, body.email);
         throw new UnauthorizedException('Invalid credentials');
       }
       throw error;
     }
-    this.rateLimits.resetLoginFailures(request.ip, body.email);
+    await this.rateLimits.resetLoginFailures(request.ip, body.email);
     const created = await this.sessions.createSession(user.id);
     this.setSessionCookie(reply, created.token);
     this.requestContext.update({ authenticatedUserId: user.id });
@@ -133,11 +79,9 @@ export class AuthController {
   @ApiNoContentResponse({ description: 'Session revoked' })
   @ApiResponse(RATE_LIMITED_RESPONSE)
   async logout(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): Promise<void> {
-    this.rateLimits.guardEndpoint(request.ip);
+    await this.rateLimits.guardEndpoint(request.ip);
     const token = this.sessionToken(request);
-    if (token !== null) {
-      await this.sessions.revokeSession(token);
-    }
+    if (token !== null) await this.sessions.revokeSession(token);
     this.clearSessionCookie(reply);
   }
 
@@ -148,11 +92,11 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Session is missing, invalid, or expired' })
   @ApiResponse(RATE_LIMITED_RESPONSE)
   async refresh(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply): Promise<SessionResponse> {
-    this.rateLimits.guardRefresh(request.ip);
+    await this.rateLimits.guardRefresh(request.ip);
     const token = this.sessionToken(request);
     const rotated = token === null ? null : await this.sessions.rotateSession(token);
     if (rotated === null) {
-      this.rateLimits.recordRefreshFailure(request.ip);
+      await this.rateLimits.recordRefreshFailure(request.ip);
       throw new UnauthorizedException('Session is invalid or expired');
     }
     this.setSessionCookie(reply, rotated.token);
@@ -166,12 +110,10 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'No active session' })
   @ApiResponse(RATE_LIMITED_RESPONSE)
   async session(@Req() request: FastifyRequest): Promise<SessionResponse> {
-    this.rateLimits.guardEndpoint(request.ip);
+    await this.rateLimits.guardEndpoint(request.ip);
     const token = this.sessionToken(request);
     const session = token === null ? null : await this.sessions.validateSession(token);
-    if (session === null) {
-      throw new UnauthorizedException('No active session');
-    }
+    if (session === null) throw new UnauthorizedException('No active session');
     this.requestContext.update({ authenticatedUserId: session.userId });
     return sessionResponseSchema.parse({ session: toSessionView(session) });
   }
