@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller.js';
 import { AuthRateLimitService } from './auth-rate-limit.service.js';
 import { PostgresAuthRateLimiter } from './postgres-auth-rate-limiter.js';
 import { AUTH_ENDPOINT_IP_LIMITER, AUTH_LOGIN_EMAIL_IP_LIMITER, AUTH_LOGIN_IP_LIMITER, AUTH_REFRESH_IP_LIMITER, SESSION_COOKIE } from './auth.tokens.js';
+import { DATABASE } from '../database/database.constants.js';
 
 export interface AuthModuleOptions {
   database: PostgresDatabase | null;
@@ -34,10 +35,10 @@ export class AuthModule {
       controllers: [AuthController],
       providers: [
         { provide: SESSION_COOKIE, useValue: sessionCookie },
-        { provide: AUTH_LOGIN_IP_LIMITER, useFactory: (db: PostgresDatabase) => buildLimiter(db, options.config.AUTH_LOGIN_IP_MAX_FAILURES, options.config.AUTH_LOGIN_IP_WINDOW_MS, 'login_ip'), inject: ['DATABASE'] },
-        { provide: AUTH_LOGIN_EMAIL_IP_LIMITER, useFactory: (db: PostgresDatabase) => buildLimiter(db, options.config.AUTH_LOGIN_EMAIL_IP_MAX_FAILURES, options.config.AUTH_LOGIN_EMAIL_IP_WINDOW_MS, 'login_email_ip'), inject: ['DATABASE'] },
-        { provide: AUTH_REFRESH_IP_LIMITER, useFactory: (db: PostgresDatabase) => buildLimiter(db, options.config.AUTH_REFRESH_IP_MAX_REQUESTS, options.config.AUTH_REFRESH_IP_WINDOW_MS, 'refresh_ip'), inject: ['DATABASE'] },
-        { provide: AUTH_ENDPOINT_IP_LIMITER, useFactory: (db: PostgresDatabase) => buildLimiter(db, options.config.AUTH_ENDPOINT_IP_MAX_REQUESTS, options.config.AUTH_ENDPOINT_IP_WINDOW_MS, 'endpoint_ip'), inject: ['DATABASE'] },
+        { provide: AUTH_LOGIN_IP_LIMITER, useFactory: (db: PostgresDatabase) => buildLimiter(db, options.config.AUTH_LOGIN_IP_MAX_FAILURES, options.config.AUTH_LOGIN_IP_WINDOW_MS, 'login_ip'), inject: [DATABASE] },
+        { provide: AUTH_LOGIN_EMAIL_IP_LIMITER, useFactory: (db: PostgresDatabase) => buildLimiter(db, options.config.AUTH_LOGIN_EMAIL_IP_MAX_FAILURES, options.config.AUTH_LOGIN_EMAIL_IP_WINDOW_MS, 'login_email_ip'), inject: [DATABASE] },
+        { provide: AUTH_REFRESH_IP_LIMITER, useFactory: (db: PostgresDatabase) => buildLimiter(db, options.config.AUTH_REFRESH_IP_MAX_REQUESTS, options.config.AUTH_REFRESH_IP_WINDOW_MS, 'refresh_ip'), inject: [DATABASE] },
+        { provide: AUTH_ENDPOINT_IP_LIMITER, useFactory: (db: PostgresDatabase) => buildLimiter(db, options.config.AUTH_ENDPOINT_IP_MAX_REQUESTS, options.config.AUTH_ENDPOINT_IP_WINDOW_MS, 'endpoint_ip'), inject: [DATABASE] },
         AuthRateLimitService,
       ],
     };
