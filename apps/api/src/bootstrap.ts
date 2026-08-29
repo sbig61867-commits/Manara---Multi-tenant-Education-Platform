@@ -11,13 +11,20 @@ import { resolveDocsEnabled } from './http/cookie-options.js';
 import { setupSwagger } from './http/swagger.js';
 import { configureHttpFoundation } from './http/setup.js';
 
+export interface ApiApplicationOptions {
+  verifyPermissionCatalog?: boolean;
+}
+
 /**
  * Creates and fully initializes the NestJS (Fastify) API application for the
- * given environment configuration. Mirrors the production bootstrap path in
- * `main.ts` (module graph, adapter, global prefix, HTTP foundation, Swagger)
- * but does not listen on a port, so it can be driven by tests via `inject()`.
+ * given environment configuration. The optional startup-verification switch
+ * is intended for isolated HTTP-foundation tests; production bootstrap keeps
+ * permission-catalog verification enabled by default.
  */
-export async function createApiApplication(config: ApiEnv): Promise<NestFastifyApplication> {
+export async function createApiApplication(
+  config: ApiEnv,
+  options: ApiApplicationOptions = {},
+): Promise<NestFastifyApplication> {
   const logger = createLogger({ service: 'api', level: config.LOG_LEVEL, pretty: config.LOG_PRETTY });
 
   const databaseConfig = resolveDatabaseConfig();
@@ -46,11 +53,6 @@ export async function createApiApplication(config: ApiEnv): Promise<NestFastifyA
       { logger: false },
     );
 
-    await verifyPermissionCatalogAtStartup(
-      config.NODE_ENV,
-      database === null ? null : () => app!.get(PermissionCatalogService).verifyCatalog(),
-    );
-
     app.setGlobalPrefix(API_VERSION, { exclude: ['health'] });
     app.enableShutdownHooks();
 
@@ -58,6 +60,13 @@ export async function createApiApplication(config: ApiEnv): Promise<NestFastifyA
 
     if (resolveDocsEnabled(config.API_ENABLE_DOCS, config.NODE_ENV)) {
       setupSwagger(app);
+    }
+
+    if (options.verifyPermissionCatalog !== false) {
+      await verifyPermissionCatalogAtStartup(
+        config.NODE_ENV,
+        database === null ? null : () => app!.get(PermissionCatalogService).verifyCatalog(),
+      );
     }
 
     return app;

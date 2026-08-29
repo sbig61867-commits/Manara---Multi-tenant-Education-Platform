@@ -37,7 +37,7 @@ async function withApi(
   let app: NestFastifyApplication | null = null;
   try {
     const config = loadConfig({ schema: apiEnvSchema, service: 'api' });
-    app = await createApiApplication(config);
+    app = await createApiApplication(config, { verifyPermissionCatalog: false });
     await fn(app);
   } finally {
     await app?.close();
